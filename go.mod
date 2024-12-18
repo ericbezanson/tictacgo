@@ -1,4 +1,4 @@
-module goChatSocket
+module tictacgo
 
 go 1.23.3
 

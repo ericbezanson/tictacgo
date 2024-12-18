@@ -14,8 +14,8 @@ Follow these steps to clone and run the application:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/ericbezanson/GoProjects/tree/main/GoChatWebsocket
-cd goChatWebocket
+git clone https://github.com/ericbezanson/tictacgo.git
+cd tictacgo
 ```
 
 ### 2. Install Deps 
