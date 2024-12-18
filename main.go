@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"tictacgo/game"
@@ -11,13 +12,29 @@ import (
 )
 
 func main() {
+	// Initialize the Tic-Tac-Toe game
 	ticTacToe := game.NewGame()
 
-	http.Handle("/", http.FileServer(http.Dir("./")))
+	// Serve static files from the "static" directory
+	fs := http.FileServer(http.Dir("./static"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	// Home page route
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/index.html")
+	})
+
+	// Lobby route
+	http.HandleFunc("/lobby", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/lobby.html")
+	})
+
+	// WebSocket route
 	http.Handle("/ws", websocket.Handler(func(conn *websocket.Conn) {
 		ws.HandleConnections(conn, ticTacToe)
 	}))
 
+	// Start the server
 	fmt.Println("Server started at :8080")
-	http.ListenAndServe(":8080", nil)
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
