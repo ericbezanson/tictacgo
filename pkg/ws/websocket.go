@@ -2,8 +2,8 @@ package ws
 
 import (
 	"fmt"
-	"tictacgo/game"
-	"tictacgo/types"
+	"tictacgo/pkg/game"
+	"tictacgo/pkg/types"
 
 	"golang.org/x/net/websocket"
 )

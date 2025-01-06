@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"tictacgo/game"
-	"tictacgo/ws"
+	"tictacgo/pkg/game"
+	"tictacgo/pkg/ws"
 
 	"golang.org/x/net/websocket"
 )
@@ -13,7 +13,7 @@ import (
 func main() {
 	ticTacToe := game.NewGame()
 
-	http.Handle("/", http.FileServer(http.Dir("./")))
+	http.Handle("/", http.FileServer(http.Dir("./web")))
 	http.Handle("/ws", websocket.Handler(func(conn *websocket.Conn) {
 		ws.HandleConnections(conn, ticTacToe)
 	}))
