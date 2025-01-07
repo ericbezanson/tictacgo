@@ -5,69 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Go WebSocket Chat with Tic-Tac-Toe</title>
-    <style>
-        body {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            padding: 50px;
-            font-family: Arial, sans-serif;
-        }
-
-        #chat,
-        #game {
-            width: 45%;
-            padding: 20px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-        }
-
-        #messages {
-            height: 300px;
-            overflow-y: scroll;
-            border: 1px solid #ddd;
-            padding: 5px;
-            margin-bottom: 10px;
-        }
-
-        #input {
-            margin-top: 10px;
-        }
-
-        #tic-tac-toe {
-            display: grid;
-            grid-template-columns: repeat(3, 100px);
-            grid-template-rows: repeat(3, 100px);
-            gap: 5px;
-        }
-
-        .cell {
-            width: 100px;
-            height: 100px;
-            background: #f4f4f4;
-            border: 2px solid #aaa;
-            font-size: 36px;
-            font-weight: bold;
-            text-align: center;
-            line-height: 100px;
-            cursor: pointer;
-        }
-
-        .system-msg {
-            color: red;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        #player-info {
-            margin-top: 15px;
-            font-size: 16px;
-        }
-    </style>
+    <link rel="stylesheet" href="../static/styles.css">
 </head>
 
 <body>
-
     <!-- Tic-Tac-Toe Game Section -->
     <div id="game">
         <h2>Tic-Tac-Toe</h2>
@@ -86,100 +27,96 @@
     </div>
 
     <script>
+        const lobbyID = window.location.pathname.split("/")[2];  // Extract lobby ID from URL
+        console.log("Connecting to lobby ID:", lobbyID);  // Log to verify
+        const ws = new WebSocket(`ws://localhost:8080/ws?lobby=${lobbyID}`);
 
-        // Websocket constructor
-        const ws = new WebSocket("ws://localhost:8080/ws");
+        console.log("WebSocket URL:", `ws://localhost:8080/ws?lobby=${lobbyID}`);
 
-        // interface vars
+        // Interface vars
         const gameBoard = document.getElementById("tic-tac-toe");
         const messagesDiv = document.getElementById("messages");
         const playerInfo = document.getElementById("player-info");
 
-        // initial game values
+        // Initial game values
         let currentPlayer = "X";
         let userName = "";
         let playerSymbol = "";
         let activePlayer = "X";
         let gameStarted = false;
 
-        // websocket connection opened
+        // WebSocket connection opened
         ws.onopen = () => {
             console.log("WebSocket connection established");
         };
 
-        // websocket connection error
+        // WebSocket connection error
         ws.onerror = (error) => {
+            log.Printf("WebSocket connection error: %v", err)
             console.log("WebSocket error:", error);
         };
 
-        // websocket connection closed
+        // WebSocket connection closed
         ws.onclose = () => {
             console.log("WebSocket connection closed");
         };
 
-        // handler for messages recieved from server
+        // Handler for messages received from server
         ws.onmessage = (event) => {
             const message = JSON.parse(event.data);
-            console.log("Message received:", message);
-
+            // console.log("Message received:", message);
+            console.log("MESSAGE", message)
             switch (message.type) {
 
-                // more than two connections 
+                case "updatePlayers":
+                    const playerList = message.players.map(p => `${p.Name} (${p.Symbol})`).join(", ");
+                    playerInfo.innerHTML = `Current Players: <b>${playerList}</b>`;
+                    break;
+
                 case "lobbyFull":
                     userName = message.userName;
                     playerInfo.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
                     alert(message.text);
                     break;
 
-                // player move message, triggered by what handleCellClick() sends to server
-                case "move":
-                    // Ensure message.position is a valid number
-                    if (typeof message.position === "number" && message.position >= 0) {
-                        console.log("mesg", message)
-                        const cell = gameBoard.children[message.position];
-                        console.log("Accessing Position:", message.position);
-
-                        if (!cell) {
-                            console.error("Invalid tile position", message.position);
-                            return;
-                        }
-                        cell.textContent = message.text;  // Update the tile
-                    } else {
-                        console.error("Unexpected message format", message);
-                    }
-                    break;
-
-                // switch whos turn it is based on who server deems is the active player
-                case "updateTurn":
-                    activePlayer = message.text;
-                    displaySystemMessage(`It's ${activePlayer}'s turn.`);
-                    break;
-
-                // used for painting system chat messages
-                case "system":
-                    messagesDiv.innerHTML += `<p class="system-msg">GAMEMASTER: ${message.text}</p>`;
-                    break;
-
-                // used for painting user chat messages
-                case "chat":
-                    messagesDiv.innerHTML += `<p>${message.sender}: ${message.text}</p>`;
-                    break;
-
-                // player assignment
                 case "assignPlayer":
                     userName = message.userName;
                     playerSymbol = message.symbol;
                     playerInfo.innerHTML = `YOU ARE PLAYING AS <b>${userName} (${playerSymbol})</b>`;
                     break;
 
-                // alert when game is won, reset board
+                // Handler for player moves
+                case "move":
+                    if (typeof message.position === "number" && message.position >= 0) {
+                        const cell = gameBoard.children[message.position];
+                        if (!cell) {
+                            console.error("Invalid tile position", message.position);
+                            return;
+                        }
+                        cell.textContent = message.symbol;  // Update the tile with the player's symbol
+                        cell.style.pointerEvents = "none";  // Disable interaction on the cell once it's filled
+                    } else {
+                        console.error("Unexpected message format", message);
+                    }
+                    break;
+
+                case "updateTurn":
+                    activePlayer = message.text;
+                    displaySystemMessage(`It's ${activePlayer}'s turn.`);
+                    break;
+                case "system":
+                    messagesDiv.innerHTML += `<p class="system-msg">GAMEMASTER: ${message.text}</p>`;
+                    break;
+
+                case "chat":
+                    messagesDiv.innerHTML += `<p>${message.sender}: ${message.text}</p>`;
+                    break;
+
                 case "gameOver":
-                    console.log("game over!", message)
                     alert(message.text);  // Show the winner
                     resetBoard();  // Reset the game
                     break;
 
-                // reset
                 case "reset":
                     resetBoard();
                     break;
@@ -192,22 +129,20 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         };
 
-
-        // sends message to server when submit button is clicked
+        // Sends message to server when submit button is clicked
         function sendMessage() {
             const input = document.getElementById("message");
             ws.send(JSON.stringify({ type: "chat", sender: userName, text: input.value }));
             input.value = "";
         }
 
-        // send tic tac toe tile position data to server to be processed by server game logic
-
+        // Send Tic-Tac-Toe tile position data to server to be processed by server game logic
         function handleCellClick(e) {
             const cell = e.target;
             const cells = Array.from(gameBoard.children);
             const position = cells.indexOf(cell);
 
-            // check if spectator
+            // Check if spectator
             if (playerSymbol === "") {
                 alert("You are spectating and cannot play.");
                 return;
@@ -230,7 +165,7 @@
             console.log(`Move sent: Player ${userName} to position ${position}`);
         }
 
-        // creates game board
+        // Creates game board
         function createTicTacToeBoard() {
             gameBoard.innerHTML = "";  // Clear previous game board
             for (let i = 0; i < 9; i++) {
@@ -251,7 +186,7 @@
             });
         }
 
-        // displays system message in chat, adds system message chat styling
+        // Displays system message in chat, adds system message chat styling
         function displaySystemMessage(msg) {
             messagesDiv.innerHTML += `<p class="system-msg">GAMEMASTER: ${msg}</p>`;
         }
@@ -261,9 +196,3 @@
 </body>
 
 </html>
-
-
-
-<!-- TODO:
-- graceful closing 
--->
