@@ -13,15 +13,32 @@ document.addEventListener("DOMContentLoaded", () => {
         fetch("/lobbies")
             .then((response) => response.json())
             .then((data) => {
+                console.log("DATA", data);
                 lobbyList.innerHTML = "";
+    
+                // Check the structure of the data to prevent errors
+                if (!Array.isArray(data)) {
+                    console.error("Expected an array of lobbies, but got:", data);
+                    return;
+                }
+    
                 data.forEach((lobby) => {
-                    const li = document.createElement("li");
-                    li.innerHTML = `${lobby.Name} (${lobby.Players}/${lobby.MaxPlayers}) 
-                    <button onclick="joinLobby('${lobby.ID}')">Join</button>`;
-                    lobbyList.appendChild(li);
+                    if (lobby && lobby.Name && Array.isArray(lobby.Players)) {
+                        const playerCount = lobby.Players.length;
+                        const playerNames = lobby.Players.map(player => player.Name).join(", ");
+                        const li = document.createElement("li");
+                        li.innerHTML = `${lobby.Name} (${playerNames}/${lobby.MaxPlayers}) 
+                        <button onclick="joinLobby('${lobby.ID}')">Join</button>`;
+                        lobbyList.appendChild(li);
+                    }
                 });
+            })
+            .catch((error) => {
+                console.error("Error fetching lobbies:", error);
+                alert(`Error fetching lobbies: ${error.message}`);
             });
     }
+    
 
     window.joinLobby = function (id) {
         window.location.href = `/lobby/${id}`;
