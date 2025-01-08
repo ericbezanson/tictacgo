@@ -87,14 +87,18 @@
 
                 // Handler for player moves
                 case "move":
+                    // NOTE - proper sequence of events
+                    // 1. Listen for the "move" message and update the UI.
+                    // 2. Show an alert if the game is won or drawn and reset the board.
+                    // 3. Update the turn information after the turn switches.
                     if (typeof message.position === "number" && message.position >= 0) {
                         const cell = gameBoard.children[message.position];
                         if (!cell) {
                             console.error("Invalid tile position", message.position);
                             return;
                         }
-                        cell.textContent = message.symbol;  // Update the tile with the player's symbol
-                        cell.style.pointerEvents = "none";  // Disable interaction on the cell once it's filled
+                        cell.textContent = message.symbol;
+                        cell.style.pointerEvents = "none"; // Disable interaction on filled cell
                     } else {
                         console.error("Unexpected message format", message);
                     }
@@ -112,7 +116,7 @@
                     messagesDiv.innerHTML += `<p>${message.sender}: ${message.text}</p>`;
                     break;
 
-                case "gameOver":
+                case "win":
                     alert(message.text);  // Show the winner
                     resetBoard();  // Reset the game
                     break;
