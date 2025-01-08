@@ -5,19 +5,13 @@ import (
 	"fmt"
 	"html/template" // Provides functions for parsing and executing HTML templates, allowing the rendering of HTML content with dynamic data.
 	"net/http"      // handles http requests
-	"sync"          // Provides synchronization primitives like sync.Mutex, used here to handle concurrent access to shared resources (like the lobby data).
 	"tictacgo/pkg/game"
 	"tictacgo/pkg/models"
 
 	"github.com/google/uuid" // generate uuids
 )
 
-var Mu sync.Mutex
-
 func CreateLobby(w http.ResponseWriter, r *http.Request) {
-	Mu.Lock()
-	defer Mu.Unlock()
-
 	// creates a new instance of a game using a function defined in the game package.
 	newGame := game.NewGame()
 
@@ -41,9 +35,6 @@ func CreateLobby(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetLobbies(w http.ResponseWriter, r *http.Request) {
-	Mu.Lock()
-	// defer - unlock after func executes
-	defer Mu.Unlock()
 
 	// A slice openLobbies is created
 	var openLobbies []*models.Lobby
@@ -65,10 +56,8 @@ func ServeLobby(w http.ResponseWriter, r *http.Request) {
 	// extracts the lobby ID from the URL path.
 	lobbyID := r.URL.Path[len("/lobby/"):]
 
-	Mu.Lock()
 	// The code looks for the lobby in models.Lobbies using lobbyID.
 	lobby, exists := models.Lobbies[lobbyID]
-	Mu.Unlock()
 
 	if !exists {
 		http.NotFound(w, r)

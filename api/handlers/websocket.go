@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sync"
 	"tictacgo/pkg/models"
 
 	"github.com/google/uuid"
@@ -14,9 +13,6 @@ import (
 // globals
 // store active game lobbies in a map, a map in go is used to store key value pairs
 var Lobbies = make(map[string]*models.Lobby)
-
-// A mutex (short for mutual exclusion lock), used to synchronize access to shared resources. This prevents concurrent access to shared data, ensuring that only one thread can modify or read from Lobbies at a time, avoiding race conditions.
-var Mu sync.Mutex
 
 // HandleWebSocket - Handle WebSocket connection
 func HandleWebSocket(ws *websocket.Conn) {
@@ -31,10 +27,9 @@ func HandleWebSocket(ws *websocket.Conn) {
 		return
 	}
 
-	// Lock and check if the lobby exists
-	Mu.Lock()
+	// check if the lobby exists
+
 	lobby, exists := models.Lobbies[lobbyID]
-	Mu.Unlock()
 
 	// Log the check
 	fmt.Printf("Lobby exists: %v Lobby data: %+v\n", exists, lobby)
@@ -129,7 +124,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 		case "chat":
 			BroadcastChatMessage(lobby, msg)
 		case "move":
-			BroadcastGameMove(lobby, msg)
+			BroadcastGameMove(lobby, ws, msg)
 		}
 	}
 
@@ -147,27 +142,25 @@ func BroadcastLobbyState(lobby *models.Lobby) {
 		Players: lobby.Players,
 	}
 
-	Mu.Lock()
 	for _, conn := range lobby.Conns {
 		websocket.JSON.Send(conn, state)
 	}
-	Mu.Unlock()
+
 }
 
 func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
 	// Log the incoming chat message
 	fmt.Printf("Broadcasting chat message: %+v\n", msg)
 
-	Mu.Lock()
 	for _, conn := range lobby.Conns {
 		if err := websocket.JSON.Send(conn, msg); err != nil {
 			fmt.Printf("Error broadcasting message: %v\n", err)
 		}
 	}
-	Mu.Unlock()
+
 }
 
-func BroadcastGameMove(lobby *models.Lobby, msg map[string]interface{}) {
+func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]interface{}) {
 	// Log the incoming move message
 	log.Printf("Received move: %+v", msg)
 
@@ -175,26 +168,69 @@ func BroadcastGameMove(lobby *models.Lobby, msg map[string]interface{}) {
 	game := lobby.Game
 
 	// Extract the move details
-	position := msg["position"].(int)
+	rawPosition := msg["position"].(float64)
+	positionAsInt := int(rawPosition)
 	symbol := msg["symbol"].(string)
 
 	// Make the move
-	if game.MakeMove(position, symbol) {
+	if game.MakeMove(positionAsInt, symbol) {
+
+		// !NOTE - proper sequence of events:
+		// Player makes a move (server processes the move).
+		// UI is updated (via WebSocket message).
+		// Win or draw condition is checked (server sends an alert and chat message).
+		// If no win or draw, call SwitchTurn() (server updates the turn and notifies).
+
 		// Log successful move
-		log.Printf("Move made at position %d by symbol %s", position, symbol)
+		log.Printf("Move made at position %d by symbol %s", positionAsInt, symbol)
 
-		// Switch the turn
-		game.SwitchTurn()
-
-		// Broadcast the move to all players
-		Mu.Lock()
+		// Broadcast the move to all players (UI update)
 		for _, conn := range lobby.Conns {
 			if err := websocket.JSON.Send(conn, msg); err != nil {
 				log.Printf("Error sending move message: %v", err)
 				continue
 			}
 		}
-		Mu.Unlock()
+
+		// Check for a win
+		winPatterns := game.CheckWin(symbol)
+		if len(winPatterns) > 0 {
+			winMsg := map[string]interface{}{
+				"type":   "win",
+				"text":   fmt.Sprintf("Player %s wins!", symbol),
+				"winner": symbol,
+			}
+			BroadcastChatMessage(lobby, winMsg)
+			game.Reset()
+		}
+
+		// check for draw
+		if len(winPatterns) == 0 && game.CheckStalemate() {
+			drawMsg := map[string]interface{}{
+				"type": "draw",
+				"text": "It's a draw!",
+			}
+			BroadcastChatMessage(lobby, drawMsg)
+			game.Reset()
+		}
+
+		// If no win or draw, switch the turn
+		if len(winPatterns) == 0 && !game.CheckStalemate() {
+			game.SwitchTurn()
+			updateTurnMsg := map[string]interface{}{
+				"type": "updateTurn",
+				"text": game.CurrentTurn,
+			}
+			BroadcastChatMessage(lobby, updateTurnMsg)
+		}
+
+		// Broadcast the move to all players
+		for _, conn := range lobby.Conns {
+			if err := websocket.JSON.Send(conn, msg); err != nil {
+				log.Printf("Error sending move message: %v", err)
+				continue
+			}
+		}
 
 		// Broadcast the updated turn info
 		updateTurnMsg := map[string]interface{}{
@@ -203,8 +239,15 @@ func BroadcastGameMove(lobby *models.Lobby, msg map[string]interface{}) {
 		}
 		BroadcastChatMessage(lobby, updateTurnMsg)
 	} else {
-		// Log failure to make a valid move
-		log.Printf("Invalid move: Position %d already filled or out of bounds", position)
+		// Send an error message back to the player
+		errorMsg := map[string]interface{}{
+			"type":     "invalidMove",
+			"text":     "Invalid move: Position already filled or out of bounds",
+			"position": positionAsInt,
+		}
+		if err := websocket.JSON.Send(ws, errorMsg); err != nil {
+			log.Printf("Error sending invalid move message: %v", err)
+		}
 	}
 }
 

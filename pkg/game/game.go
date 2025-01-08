@@ -70,3 +70,10 @@ func (g *Game) CheckStalemate() bool {
 	}
 	return true
 }
+
+// reset game after win or draw
+func (g *Game) Reset() {
+	g.Board = [9]string{"", "", "", "", "", "", "", "", ""}
+	g.CurrentTurn = "X"
+	g.GameStarted = false
+}
