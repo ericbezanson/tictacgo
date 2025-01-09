@@ -76,7 +76,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 		}
 	} else {
 		// Assign all additional connections as spectators
-		player.Symbol = "Spectator" // Spectator symbol
+		player.Symbol = "S" // Spectator symbol
 		player.Name = fmt.Sprintf("Spectator %d", len(lobby.Players)-1)
 		lobby.Players = append(lobby.Players, player)
 

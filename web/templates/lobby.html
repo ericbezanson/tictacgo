@@ -45,7 +45,8 @@
         let userName = "";
         let playerSymbol = "";
         let activePlayer = "X";
-        let gameStarted = false;
+        let gameStarted = true;
+        let playerTotal = 0;
 
         // WebSocket connection opened
         ws.onopen = () => {
@@ -71,13 +72,20 @@
             switch (message.type) {
 
                 case "updatePlayers":
+                    console.log("player list", message.players)
                     const playerList = message.players.map(p => `${p.Name} (${p.Symbol})`).join(", ");
                     playerInfo.innerHTML = `Current Players: <b>${playerList}</b>`;
+                    // broadcast that a new player has joined
+                    // if (message.playerTotal > playerTotal) {
+                    //     displaySystemMessage(`${message.players[playerTotal].Name} has joined the lobby!`)
+                    //     playerTotal ++
+                    // }
+                    // !TODO - broadcast that a player has left
                     break;
 
                 case "lobbyFull":
                     userName = message.userName;
-                    playerInfo.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
+                    user.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
                     alert(message.text);
                     break;
 
@@ -85,8 +93,11 @@
                
                     userName = message.userName;
                     playerSymbol = message.symbol;
-                    user.innerHTML = `YOU ARE PLAYING AS <b>${userName} (${playerSymbol})</b>`;
+                    user.innerHTML = `YOU ARE PLAYING AS <b>${userName}</b>`;
                     break;
+
+                case "startGame":
+                    gameStarted = true
 
                 // Handler for player moves
                 case "move":
@@ -120,6 +131,8 @@
                     break;
 
                 case "win":
+                    gameStarted = false
+                    displaySystemMessage(message.text)
                     alert(message.text);  // Show the winner
                     resetBoard();  // Reset the game
                     break;
@@ -158,6 +171,12 @@
             // Prevent clicking on an already-filled cell or playing out of turn
             if (cell.textContent !== "" || activePlayer !== playerSymbol) {
                 alert("It's not your turn!");
+                return;
+            }
+
+            // prevent click on a tile before game has started 
+            if (!gameStarted) {
+                alert("Slow down! game has not started yet!")
                 return;
             }
 
