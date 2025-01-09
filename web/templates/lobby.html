@@ -12,6 +12,7 @@
     <!-- Tic-Tac-Toe Game Section -->
     <div id="game">
         <h2>Tic-Tac-Toe</h2>
+        <div id="user"></div>
         <div id="tic-tac-toe"></div>
         <div id="player-info"></div>
     </div>
@@ -37,6 +38,7 @@
         const gameBoard = document.getElementById("tic-tac-toe");
         const messagesDiv = document.getElementById("messages");
         const playerInfo = document.getElementById("player-info");
+        const user = document.getElementById("user")
 
         // Initial game values
         let currentPlayer = "X";
@@ -80,9 +82,10 @@
                     break;
 
                 case "assignPlayer":
+               
                     userName = message.userName;
                     playerSymbol = message.symbol;
-                    playerInfo.innerHTML = `YOU ARE PLAYING AS <b>${userName} (${playerSymbol})</b>`;
+                    user.innerHTML = `YOU ARE PLAYING AS <b>${userName} (${playerSymbol})</b>`;
                     break;
 
                 // Handler for player moves

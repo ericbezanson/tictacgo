@@ -192,9 +192,8 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 			}
 		}
 
-		// Check for a win
 		winPatterns := game.CheckWin(symbol)
-		if len(winPatterns) > 0 {
+		if len(winPatterns) > 0 { // Check for a win
 			winMsg := map[string]interface{}{
 				"type":   "win",
 				"text":   fmt.Sprintf("Player %s wins!", symbol),
@@ -202,34 +201,20 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 			}
 			BroadcastChatMessage(lobby, winMsg)
 			game.Reset()
-		}
-
-		// check for draw
-		if len(winPatterns) == 0 && game.CheckStalemate() {
+		} else if len(winPatterns) == 0 && game.CheckStalemate() { // Check for a Stalemate
 			drawMsg := map[string]interface{}{
 				"type": "draw",
 				"text": "It's a draw!",
 			}
 			BroadcastChatMessage(lobby, drawMsg)
 			game.Reset()
-		}
-
-		// If no win or draw, switch the turn
-		if len(winPatterns) == 0 && !game.CheckStalemate() {
+		} else if len(winPatterns) == 0 && !game.CheckStalemate() { // Standard move
 			game.SwitchTurn()
 			updateTurnMsg := map[string]interface{}{
 				"type": "updateTurn",
 				"text": game.CurrentTurn,
 			}
 			BroadcastChatMessage(lobby, updateTurnMsg)
-		}
-
-		// Broadcast the move to all players
-		for _, conn := range lobby.Conns {
-			if err := websocket.JSON.Send(conn, msg); err != nil {
-				log.Printf("Error sending move message: %v", err)
-				continue
-			}
 		}
 
 	} else {
