@@ -232,12 +232,6 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 			}
 		}
 
-		// Broadcast the updated turn info
-		updateTurnMsg := map[string]interface{}{
-			"type": "updateTurn",
-			"text": game.CurrentTurn,
-		}
-		BroadcastChatMessage(lobby, updateTurnMsg)
 	} else {
 		// Send an error message back to the player
 		errorMsg := map[string]interface{}{
