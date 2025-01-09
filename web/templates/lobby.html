@@ -12,6 +12,7 @@
     <!-- Tic-Tac-Toe Game Section -->
     <div id="game">
         <h2>Tic-Tac-Toe</h2>
+        <div id="user"></div>
         <div id="tic-tac-toe"></div>
         <div id="player-info"></div>
     </div>
@@ -37,13 +38,15 @@
         const gameBoard = document.getElementById("tic-tac-toe");
         const messagesDiv = document.getElementById("messages");
         const playerInfo = document.getElementById("player-info");
+        const user = document.getElementById("user")
 
         // Initial game values
         let currentPlayer = "X";
         let userName = "";
         let playerSymbol = "";
         let activePlayer = "X";
-        let gameStarted = false;
+        let gameStarted = true;
+        let playerTotal = 0;
 
         // WebSocket connection opened
         ws.onopen = () => {
@@ -68,22 +71,42 @@
             console.log("MESSAGE", message)
             switch (message.type) {
 
-                case "updatePlayers":
-                    const playerList = message.players.map(p => `${p.Name} (${p.Symbol})`).join(", ");
-                    playerInfo.innerHTML = `Current Players: <b>${playerList}</b>`;
+                case "initialState":
+                    // Populate game board
+                    message.state.gameBoard.forEach((symbol, index) => {
+                        if (symbol) {
+                            gameBoard.children[index].textContent = symbol;
+                            gameBoard.children[index].style.pointerEvents = "none";
+                        }
+                    });
+
+                    console.log("initial state messages", message.chatMessages)
+                    appendChatMessages(message.state.chatMessages);
+
                     break;
+
+                case "updatePlayers":
+
+                    console.log("update players message", message)
+                    appendChatMessages(message.state.chatMessages);
+
+                    break;
+
 
                 case "lobbyFull":
                     userName = message.userName;
-                    playerInfo.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
+                    user.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
                     alert(message.text);
                     break;
 
                 case "assignPlayer":
                     userName = message.userName;
                     playerSymbol = message.symbol;
-                    playerInfo.innerHTML = `YOU ARE PLAYING AS <b>${userName} (${playerSymbol})</b>`;
+                    user.innerHTML = `YOU ARE PLAYING AS <b>${userName}</b>`;
                     break;
+
+                case "startGame":
+                    gameStarted = true
 
                 // Handler for player moves
                 case "move":
@@ -106,7 +129,6 @@
 
                 case "updateTurn":
                     activePlayer = message.text;
-                    displaySystemMessage(`It's ${activePlayer}'s turn.`);
                     break;
                 case "system":
                     messagesDiv.innerHTML += `<p class="system-msg">GAMEMASTER: ${message.text}</p>`;
@@ -117,6 +139,7 @@
                     break;
 
                 case "win":
+                    gameStarted = false
                     alert(message.text);  // Show the winner
                     resetBoard();  // Reset the game
                     break;
@@ -158,6 +181,12 @@
                 return;
             }
 
+            // prevent click on a tile before game has started 
+            if (!gameStarted) {
+                alert("Slow down! game has not started yet!")
+                return;
+            }
+
             // Send move message to the server
             ws.send(JSON.stringify({
                 type: "move",
@@ -190,9 +219,19 @@
             });
         }
 
-        // Displays system message in chat, adds system message chat styling
-        function displaySystemMessage(msg) {
-            messagesDiv.innerHTML += `<p class="system-msg">GAMEMASTER: ${msg}</p>`;
+        function appendChatMessages(messages) {
+            console.log("append chat messages", messages)
+            messages.forEach(chatMsg => {
+                // Check if the message has already been added
+                if (!messagesDiv.innerHTML.includes(chatMsg.text)) {
+                    // Check if sender is "GAMEMASTER" and add the "system-msg" class
+                    if (chatMsg.sender === "GAMEMASTER") {
+                        messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text}</p>`;
+                    } else {
+                        messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text}</p>`;
+                    }
+                }
+            });
         }
 
     </script>

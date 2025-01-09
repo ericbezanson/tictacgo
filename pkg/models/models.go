@@ -24,6 +24,7 @@ type Lobby struct {
 	Players    []*Player
 	Conns      []*websocket.Conn // Add this field to track active WebSocket connections
 	Game       *game.Game
+	State      *LobbyState
 }
 
 type Message struct {
@@ -42,4 +43,12 @@ type Game struct {
 	UserCount      int
 	SpectatorCount int
 	Players        []string // track player names/symbols
+}
+
+type LobbyState struct {
+	GameBoard    [9]string `json:"gameBoard"`   // current state of the game board
+	CurrentTurn  string    `json:"currentTurn"` // current players turn
+	GameStarted  bool      `json:"gameStarted"`
+	ChatMessages []Message `json:"chatMessages"` // chat logs
+	Players      []string  `json:"players"`      // current connected players
 }
