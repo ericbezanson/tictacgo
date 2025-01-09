@@ -86,8 +86,6 @@
                     break;
 
                 case "updatePlayers":
-                    const playerList = message.state.players.map(p => `${p.Name} (${p.Symbol})`).join(", ");
-                    playerInfo.innerHTML = `Current Players: <b>${playerList}</b>`;
 
                     console.log("update players message", message)
                     appendChatMessages(message.state.chatMessages);
