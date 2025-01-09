@@ -70,6 +70,8 @@ func HandleWebSocket(ws *websocket.Conn) {
 		player.Name = fmt.Sprintf("Player %s", symbol)
 		lobby.Players = append(lobby.Players, player)
 
+		fmt.Println("player", player)
+
 		// Prepare and send the message to the player
 		gameMasterMsg := map[string]interface{}{
 			"type":     "assignPlayer",
@@ -80,13 +82,15 @@ func HandleWebSocket(ws *websocket.Conn) {
 		}
 		sendJSON(ws, gameMasterMsg)
 
-		// Broadcast lobby state and notify other players
-		BroadcastLobbyState(lobby)
+		// Notify all about the new player joining
 		BroadcastChatMessage(lobby, map[string]interface{}{
-			"type":   "playerJoin",
+			"type":   "chat",
 			"sender": "GAMEMASTER",
 			"text":   fmt.Sprintf("Player %s has joined the game!", symbol),
 		})
+
+		// Broadcast lobby state and notify other players
+		BroadcastLobbyState(lobby)
 	} else {
 		// Assign additional connections as spectators
 		player.Symbol = "S" // Spectator symbol
@@ -101,14 +105,15 @@ func HandleWebSocket(ws *websocket.Conn) {
 		}
 		sendJSON(ws, msg)
 
-		// Broadcast lobby state and notify other players
-		BroadcastLobbyState(lobby)
-		// Notify others about the new spectator
+		// Notify all about the new spectator joining
 		BroadcastChatMessage(lobby, map[string]interface{}{
-			"type":   "playerJoin",
+			"type":   "chat",
 			"sender": "GAMEMASTER",
 			"text":   fmt.Sprintf("Spectator %d is now spectating!", len(lobby.Players)-1),
 		})
+
+		// Broadcast lobby state and notify other players
+		BroadcastLobbyState(lobby)
 	}
 
 	// Add the WebSocket connection to the lobby
@@ -160,15 +165,14 @@ func sendJSON(ws *websocket.Conn, msg map[string]interface{}) {
 		log.Println("Error sending JSON:", err)
 	}
 }
+
 func BroadcastLobbyState(lobby *models.Lobby) {
 	state := struct {
-		Type         string           `json:"type"`
-		Players      []*models.Player `json:"players"`
-		ChatMessages []models.Message `json:"chatMessages"`
+		Type  string             `json:"type"`
+		State *models.LobbyState `json:"state"`
 	}{
-		Type:         "updatePlayers",
-		Players:      lobby.Players,
-		ChatMessages: lobby.State.ChatMessages,
+		Type:  "updatePlayers",
+		State: lobby.State,
 	}
 
 	// Send state to all connected clients

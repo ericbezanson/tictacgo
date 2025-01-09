@@ -80,36 +80,18 @@
                         }
                     });
 
-                    // Add chat messages to the UI, ensuring no duplicates.
-                    message.chatMessages.forEach(chatMsg => {
-                        // Check if the message has already been added
-                        if (!messagesDiv.innerHTML.includes(chatMsg.text)) {
-                            // Check if sender is "GAMEMASTER" and add the "system-msg" class
-                            if (chatMsg.sender === "GAMEMASTER") {
-                                messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text}</p>`;
-                            } else {
-                                messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text}</p>`;
-                            }
-                        }
-                    });
+                    console.log("initial state messages", message.chatMessages)
+                    appendChatMessages(message.state.chatMessages);
+
                     break;
 
                 case "updatePlayers":
-                    const playerList = message.players.map(p => `${p.Name} (${p.Symbol})`).join(", ");
+                    const playerList = message.state.players.map(p => `${p.Name} (${p.Symbol})`).join(", ");
                     playerInfo.innerHTML = `Current Players: <b>${playerList}</b>`;
 
-                    // Add chat messages to the UI, ensuring no duplicates.
-                    message.chatMessages.forEach(chatMsg => {
-                        // Check if the message has already been added
-                        if (!messagesDiv.innerHTML.includes(chatMsg.text)) {
-                            // Check if sender is "GAMEMASTER" and add the "system-msg" class
-                            if (chatMsg.sender === "GAMEMASTER") {
-                                messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text}</p>`;
-                            } else {
-                                messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text}</p>`;
-                            }
-                        }
-                    });
+                    console.log("update players message", message)
+                    appendChatMessages(message.state.chatMessages);
+
                     break;
 
 
@@ -149,7 +131,6 @@
 
                 case "updateTurn":
                     activePlayer = message.text;
-                    // displaySystemMessage(`It's ${activePlayer}'s turn.`);
                     break;
                 case "system":
                     messagesDiv.innerHTML += `<p class="system-msg">GAMEMASTER: ${message.text}</p>`;
@@ -161,7 +142,6 @@
 
                 case "win":
                     gameStarted = false
-                    // displaySystemMessage(message.text)
                     alert(message.text);  // Show the winner
                     resetBoard();  // Reset the game
                     break;
@@ -241,9 +221,19 @@
             });
         }
 
-        // Displays system message in chat, adds system message chat styling
-        function displaySystemMessage(msg) {
-            messagesDiv.innerHTML += `<p class="system-msg">GAMEMASTER: ${msg}</p>`;
+        function appendChatMessages(messages) {
+            console.log("append chat messages", messages)
+            messages.forEach(chatMsg => {
+                // Check if the message has already been added
+                if (!messagesDiv.innerHTML.includes(chatMsg.text)) {
+                    // Check if sender is "GAMEMASTER" and add the "system-msg" class
+                    if (chatMsg.sender === "GAMEMASTER") {
+                        messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text}</p>`;
+                    } else {
+                        messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text}</p>`;
+                    }
+                }
+            });
         }
 
     </script>
