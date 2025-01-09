@@ -35,6 +35,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 			GameBoard:    [9]string{},
 			ChatMessages: []models.Message{},
 			Players:      []string{},
+			ReadyPlayers: map[string]bool{}, // Track readiness of players
 		}
 	}
 
@@ -50,6 +51,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 				GameBoard:    [9]string{},        // Initialize an empty game board
 				ChatMessages: []models.Message{}, // Initialize an empty chat history
 				Players:      []string{},         // Initialize an empty player list
+				ReadyPlayers: map[string]bool{},  // Initialize ready players map
 			},
 		}
 		models.Lobbies[lobbyID] = lobby
@@ -69,8 +71,6 @@ func HandleWebSocket(ws *websocket.Conn) {
 		player.Symbol = symbol
 		player.Name = fmt.Sprintf("Player %s", symbol)
 		lobby.Players = append(lobby.Players, player)
-
-		fmt.Println("player", player)
 
 		// Prepare and send the message to the player
 		gameMasterMsg := map[string]interface{}{
@@ -146,6 +146,30 @@ func HandleWebSocket(ws *websocket.Conn) {
 			BroadcastChatMessage(lobby, msg)
 		case "move":
 			BroadcastGameMove(lobby, ws, msg)
+		case "ready":
+			// Mark the player as ready
+			lobby.State.ReadyPlayers[player.ID] = true
+
+			// Check if both players are ready to start the game
+			if len(lobby.State.ReadyPlayers) == 2 {
+
+				// Broadcast startGame message to all connected clients
+				startGameMsg := map[string]interface{}{
+					"type": "startGame",
+				}
+				for _, conn := range lobby.Conns {
+					sendJSON(conn, startGameMsg)
+				}
+
+				// Notify both players that the game is ready to start
+				BroadcastChatMessage(lobby, map[string]interface{}{
+					"type":   "startGame",
+					"sender": "GAMEMASTER",
+					"text":   "Both players are ready. The game will start now!",
+				})
+
+				// Start the game logic here (or broadcast start game state)
+			}
 		}
 	}
 

@@ -15,6 +15,11 @@
         <div id="user"></div>
         <div id="tic-tac-toe"></div>
         <div id="player-info"></div>
+        <div id="ready-toggle">
+            <span>Ready up </span>
+            <input onclick="toggleReady()" type="checkbox">
+            <button id="ready-button">Ready Up</button> <!-- Add this button element -->
+        </div>
     </div>
 
     <!-- WebSocket Chat Section -->
@@ -45,8 +50,9 @@
         let userName = "";
         let playerSymbol = "";
         let activePlayer = "X";
-        let gameStarted = true;
+        let gameStarted = false;
         let playerTotal = 0;
+        let isReady = false;  // Track the player's readiness
 
         // WebSocket connection opened
         ws.onopen = () => {
@@ -106,6 +112,7 @@
                     break;
 
                 case "startGame":
+                    console.log("start game", message)
                     gameStarted = true
 
                 // Handler for player moves
@@ -198,6 +205,19 @@
             console.log(`Move sent: Player ${userName} to position ${position}`);
         }
 
+        // Handle the "Ready Up" toggle
+        function toggleReady() {
+            isReady = !isReady;
+            const button = document.querySelector("#ready-toggle button");
+            button.textContent = isReady ? "Cancel Ready" : "Ready Up";
+
+            // Send the readiness status to the server
+            ws.send(JSON.stringify({
+                type: "ready",
+                ready: isReady,
+                userName: userName
+            }));
+        }
         // Creates game board
         function createTicTacToeBoard() {
             gameBoard.innerHTML = "";  // Clear previous game board
