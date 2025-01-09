@@ -24,6 +24,7 @@ type Lobby struct {
 	Players    []*Player
 	Conns      []*websocket.Conn // Add this field to track active WebSocket connections
 	Game       *game.Game
+	State      *LobbyState
 }
 
 type Message struct {

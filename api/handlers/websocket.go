@@ -27,99 +27,115 @@ func HandleWebSocket(ws *websocket.Conn) {
 		return
 	}
 
-	// check if the lobby exists
-
+	// Retrieve the lobby from the Lobbies map and check if it exists
 	lobby, exists := models.Lobbies[lobbyID]
 
-	// Log the check
+	if exists && lobby.State == nil {
+		lobby.State = &models.LobbyState{
+			GameBoard:    [9]string{},
+			ChatMessages: []models.Message{},
+			Players:      []string{},
+		}
+	}
+
+	// Log the check result for debugging
 	fmt.Printf("Lobby exists: %v Lobby data: %+v\n", exists, lobby)
 
-	// If the lobby doesn't exist, close the WebSocket connection
+	// If the lobby doesn't exist, create a new lobby state
 	if !exists {
-		fmt.Println("Lobby not found, closing connection.")
-		ws.Close()
-		return
+		fmt.Println("Lobby not found, initializing a new lobby.")
+		lobby = &models.Lobby{
+			ID: lobbyID,
+			State: &models.LobbyState{
+				GameBoard:    [9]string{},        // Initialize an empty game board
+				ChatMessages: []models.Message{}, // Initialize an empty chat history
+				Players:      []string{},         // Initialize an empty player list
+			},
+		}
+		models.Lobbies[lobbyID] = lobby
 	}
 
 	// Proceed with assigning players to the lobby
 	playerID := uuid.New().String()
 	player := &models.Player{ID: playerID}
 
-	// Assign players based on the current player count
+	// Check the number of players in the lobby to assign roles
 	if len(lobby.Players) < 2 {
 		// Assign the first two players as "X" and "O"
 		symbol := "X"
 		if len(lobby.Players) == 1 {
 			symbol = "O"
 		}
-		player.Symbol = symbol // Assign the correct symbol
+		player.Symbol = symbol
 		player.Name = fmt.Sprintf("Player %s", symbol)
 		lobby.Players = append(lobby.Players, player)
 
-		// Prepare the message to send to the client
-		msg := map[string]interface{}{
+		// Prepare and send the message to the player
+		gameMasterMsg := map[string]interface{}{
 			"type":     "assignPlayer",
 			"userName": player.Name,
 			"symbol":   player.Symbol,
+			"sender":   "GAMEMASTER",
+			"text":     fmt.Sprintf("Player %s has joined the game!", symbol),
 		}
+		sendJSON(ws, gameMasterMsg)
 
-		// Marshal the message to JSON
-		jsonData, err := json.Marshal(msg)
-		if err != nil {
-			log.Println("Error marshalling JSON:", err)
-			return
-		}
-
-		// Send the JSON message as a raw WebSocket message (using Write)
-		if _, err := ws.Write(jsonData); err != nil {
-			log.Println("Error sending JSON:", err)
-		}
+		// Broadcast lobby state and notify other players
+		BroadcastLobbyState(lobby)
+		BroadcastChatMessage(lobby, map[string]interface{}{
+			"type":   "playerJoin",
+			"sender": "GAMEMASTER",
+			"text":   fmt.Sprintf("Player %s has joined the game!", symbol),
+		})
 	} else {
-		// Assign all additional connections as spectators
+		// Assign additional connections as spectators
 		player.Symbol = "S" // Spectator symbol
 		player.Name = fmt.Sprintf("Spectator %d", len(lobby.Players)-1)
 		lobby.Players = append(lobby.Players, player)
 
-		// Prepare the message for spectators
+		// Prepare and send the message to the spectator
 		msg := map[string]interface{}{
 			"type":     "lobbyFull",
 			"userName": player.Name,
 			"text":     "The lobby is full, you are now spectating.",
 		}
+		sendJSON(ws, msg)
 
-		// Marshal the message to JSON
-		// function from the encoding/json package that is used to convert a Go object (e.g., a struct, map, or slice) into a JSON-encoded byte slice
-		jsonData, err := json.Marshal(msg)
-		if err != nil {
-			log.Println("Error marshalling JSON:", err)
-			return
-		}
-
-		// Send the JSON message as a raw WebSocket message (using Write)
-		if _, err := ws.Write(jsonData); err != nil {
-			log.Println("Error sending JSON:", err)
-		}
+		// Broadcast lobby state and notify other players
+		BroadcastLobbyState(lobby)
+		// Notify others about the new spectator
+		BroadcastChatMessage(lobby, map[string]interface{}{
+			"type":   "playerJoin",
+			"sender": "GAMEMASTER",
+			"text":   fmt.Sprintf("Spectator %d is now spectating!", len(lobby.Players)-1),
+		})
 	}
 
 	// Add the WebSocket connection to the lobby
 	lobby.Conns = append(lobby.Conns, ws)
 
+	// Send the current state to the newly connected client
+	HandleInitialConnection(ws, lobby)
+
 	// Broadcast the updated lobby state
 	BroadcastLobbyState(lobby)
 
-	// Handle incoming messages
+	// Continuously handle incoming messages
 	for {
 		var msg map[string]interface{}
-		err := websocket.JSON.Receive(ws, &msg) // or you can use ReadMessage directly if needed
+		err := websocket.JSON.Receive(ws, &msg)
 		if err != nil {
+			fmt.Printf("Error receiving message: %v\n", err)
 			break
 		}
+		fmt.Printf("Received message: %+v\n", msg)
 
 		msgType, ok := msg["type"].(string)
 		if !ok {
 			continue
 		}
 
+		// Handle message based on its type
 		switch msgType {
 		case "chat":
 			BroadcastChatMessage(lobby, msg)
@@ -133,32 +149,60 @@ func HandleWebSocket(ws *websocket.Conn) {
 	BroadcastLobbyState(lobby)
 }
 
+// Helper function to send a JSON message over the WebSocket
+func sendJSON(ws *websocket.Conn, msg map[string]interface{}) {
+	jsonData, err := json.Marshal(msg)
+	if err != nil {
+		log.Println("Error marshalling JSON:", err)
+		return
+	}
+	if _, err := ws.Write(jsonData); err != nil {
+		log.Println("Error sending JSON:", err)
+	}
+}
 func BroadcastLobbyState(lobby *models.Lobby) {
 	state := struct {
-		Type    string           `json:"type"`
-		Players []*models.Player `json:"players"`
+		Type         string           `json:"type"`
+		Players      []*models.Player `json:"players"`
+		ChatMessages []models.Message `json:"chatMessages"`
 	}{
-		Type:    "updatePlayers",
-		Players: lobby.Players,
+		Type:         "updatePlayers",
+		Players:      lobby.Players,
+		ChatMessages: lobby.State.ChatMessages,
 	}
 
+	// Send state to all connected clients
 	for _, conn := range lobby.Conns {
 		websocket.JSON.Send(conn, state)
 	}
-
 }
 
+///----------------------- CHAT
+
 func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
-	// Log the incoming chat message
 	fmt.Printf("Broadcasting chat message: %+v\n", msg)
+	chatMessage := models.Message{
+		Type:   msg["type"].(string),
+		Text:   msg["text"].(string),
+		Sender: msg["sender"].(string),
+	}
+
+	if lobby.State != nil {
+		lobby.State.ChatMessages = append(lobby.State.ChatMessages, chatMessage)
+	} else {
+		fmt.Println("Lobby state is nil. Cannot append chat message.")
+	}
 
 	for _, conn := range lobby.Conns {
 		if err := websocket.JSON.Send(conn, msg); err != nil {
-			fmt.Printf("Error broadcasting message: %v\n", err)
+			fmt.Printf("Error broadcasting message to %v: %v\n", conn.Request().RemoteAddr, err)
+		} else {
+			fmt.Printf("Successfully sent message to %v: %+v\n", conn.Request().RemoteAddr, msg)
 		}
 	}
-
 }
+
+// --------------------------- GAME
 
 func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]interface{}) {
 	// Log the incoming move message
@@ -171,6 +215,7 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 	rawPosition := msg["position"].(float64)
 	positionAsInt := int(rawPosition)
 	symbol := msg["symbol"].(string)
+	// position := int(msg["position"].(float64))
 
 	// Make the move
 	if game.MakeMove(positionAsInt, symbol) {
@@ -183,6 +228,8 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 
 		// Log successful move
 		log.Printf("Move made at position %d by symbol %s", positionAsInt, symbol)
+
+		lobby.State.GameBoard[positionAsInt] = symbol
 
 		// Broadcast the move to all players (UI update)
 		for _, conn := range lobby.Conns {
@@ -197,22 +244,25 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 			winMsg := map[string]interface{}{
 				"type":   "win",
 				"text":   fmt.Sprintf("Player %s wins!", symbol),
+				"sender": "GAMEMASTER",
 				"winner": symbol,
 			}
 			BroadcastChatMessage(lobby, winMsg)
 			game.Reset()
 		} else if len(winPatterns) == 0 && game.CheckStalemate() { // Check for a Stalemate
 			drawMsg := map[string]interface{}{
-				"type": "draw",
-				"text": "It's a draw!",
+				"type":   "draw",
+				"text":   "It's a draw!",
+				"sender": "GAMEMASTER",
 			}
 			BroadcastChatMessage(lobby, drawMsg)
 			game.Reset()
 		} else if len(winPatterns) == 0 && !game.CheckStalemate() { // Standard move
 			game.SwitchTurn()
 			updateTurnMsg := map[string]interface{}{
-				"type": "updateTurn",
-				"text": game.CurrentTurn,
+				"type":   "updateTurn",
+				"text":   game.CurrentTurn,
+				"sender": "GAMEMASTER",
 			}
 			BroadcastChatMessage(lobby, updateTurnMsg)
 		}
@@ -228,6 +278,18 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 			log.Printf("Error sending invalid move message: %v", err)
 		}
 	}
+}
+
+func HandleInitialConnection(ws *websocket.Conn, lobby *models.Lobby) {
+	initialState := struct {
+		Type  string             `json:"type"`
+		State *models.LobbyState `json:"state"`
+	}{
+		Type:  "initialState",
+		State: lobby.State,
+	}
+
+	websocket.JSON.Send(ws, initialState)
 }
 
 func RemoveConnection(lobby *models.Lobby, conn *websocket.Conn) {
