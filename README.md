@@ -38,13 +38,16 @@ Navigate to `http://localhost:8080` in two different tabs, type message and clic
 
 ### 5. Known Issues!
 
-[cleanup] move js out of lobby.html
-[cleanup] cleanup app.js
-[cleanup] seperate spectator and player roles (ex: spectator should not see a ready button)
-[bug] Sometimes GAMEMASTER chat is not red
-[bug] unexpected message format error in console with startGame message
-[bug] game ending (win/stalemate) not starting a new game after adding ready up system
-[bug] Fix Stalemate logic, player X wins in the event of a stalemate
-[bug] ensure that “game hasn't started” message is sent over “not your turn”
+| **Type**  | **Description**                                                                 |
+|-----------|---------------------------------------------------------------------------------|
+| [cleanup] | Move JS out of `lobby.html`                                                     |
+| [cleanup] | Clean up `app.js`                                                                |
+| [cleanup] | Separate spectator and player roles (e.g., spectators should not see a ready button) |
+| [bug]     | Sometimes GAMEMASTER chat is not red                                            |
+| [bug]     | Unexpected message format error in console with `startGame` message             |
+| [bug]     | Game ending (win/stalemate) not starting a new game after adding ready-up system |
+| [bug]     | Fix stalemate logic; player X wins in the event of a stalemate                   |
+| [bug]     | Ensure that “game hasn't started” message is sent over “not your turn”          |
+
 
 
