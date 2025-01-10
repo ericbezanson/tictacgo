@@ -27,7 +27,7 @@ go mod tidy
 ### 3. Run the Server
 
 ```
-go run main.go
+go run cmd/main.go
 // you should see Chat server started on :8080
 ```
 
