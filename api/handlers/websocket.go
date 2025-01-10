@@ -11,11 +11,15 @@ import (
 )
 
 // globals
-// store active game lobbies in a map, a map in go is used to store key value pairs
+// store active game lobbies in a map, a map in go is used to store key value pairs, dictionary-like
 var Lobbies = make(map[string]*models.Lobby)
 
 // HandleWebSocket - Handle WebSocket connection
+// manages Chat, Moves, Ready Messages, and Game State
 func HandleWebSocket(ws *websocket.Conn) {
+
+	////// ------------------------------------------------------------------------------------------------------------- SETUP
+
 	// Extract lobby ID from the query string
 	query := ws.Request().URL.Query()
 	lobbyID := query.Get("lobby")
@@ -28,8 +32,10 @@ func HandleWebSocket(ws *websocket.Conn) {
 	}
 
 	// Retrieve the lobby from the Lobbies map and check if it exists
+	// looked up by using the lobby ID as the map key
 	lobby, exists := models.Lobbies[lobbyID]
 
+	// if lobby exists but state is nil, init a new state with an empty gameboard
 	if exists && lobby.State == nil {
 		lobby.State = &models.LobbyState{
 			GameBoard:    [9]string{},
@@ -42,23 +48,11 @@ func HandleWebSocket(ws *websocket.Conn) {
 	// Log the check result for debugging
 	fmt.Printf("Lobby exists: %v Lobby data: %+v\n", exists, lobby)
 
-	// If the lobby doesn't exist, create a new lobby state
-	if !exists {
-		fmt.Println("Lobby not found, initializing a new lobby.")
-		lobby = &models.Lobby{
-			ID: lobbyID,
-			State: &models.LobbyState{
-				GameBoard:    [9]string{},        // Initialize an empty game board
-				ChatMessages: []models.Message{}, // Initialize an empty chat history
-				Players:      []string{},         // Initialize an empty player list
-				ReadyPlayers: map[string]bool{},  // Initialize ready players map
-			},
-		}
-		models.Lobbies[lobbyID] = lobby
-	}
+	////// ------------------------------------------------------------------------------------------------------------- Player Assign
 
 	// Proceed with assigning players to the lobby
 	playerID := uuid.New().String()
+	// A new player object is created with this unique ID, using Player struct in models.go
 	player := &models.Player{ID: playerID}
 
 	// Check the number of players in the lobby to assign roles
@@ -72,14 +66,15 @@ func HandleWebSocket(ws *websocket.Conn) {
 		player.Name = fmt.Sprintf("Player %s", symbol)
 		lobby.Players = append(lobby.Players, player)
 
-		// Prepare and send the message to the player
+		// Prepare and send the message to individual player
+		// used for displaying a players username only in their client
 		gameMasterMsg := map[string]interface{}{
 			"type":     "assignPlayer",
 			"userName": player.Name,
 			"symbol":   player.Symbol,
-			"sender":   "GAMEMASTER",
-			"text":     fmt.Sprintf("Player %s has joined the game!", symbol),
 		}
+
+		// send to individual users client
 		sendJSON(ws, gameMasterMsg)
 
 		// Notify all about the new player joining
@@ -98,11 +93,13 @@ func HandleWebSocket(ws *websocket.Conn) {
 		lobby.Players = append(lobby.Players, player)
 
 		// Prepare and send the message to the spectator
+		// used to populate text in lobby full alert message
 		msg := map[string]interface{}{
 			"type":     "lobbyFull",
 			"userName": player.Name,
 			"text":     "The lobby is full, you are now spectating.",
 		}
+		// send to specific ws Conn
 		sendJSON(ws, msg)
 
 		// Notify all about the new spectator joining
@@ -119,6 +116,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 	// Add the WebSocket connection to the lobby
 	lobby.Conns = append(lobby.Conns, ws)
 
+	//!TODO - investigate ways to simplify this into one function, avoid race
 	// Send the current state to the newly connected client
 	HandleInitialConnection(ws, lobby)
 
@@ -140,6 +138,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 			continue
 		}
 
+		////// ------------------------------------------------------------------------------------------------------------- Player Actions
 		// Handle message based on its type
 		switch msgType {
 		case "chat":
@@ -148,6 +147,8 @@ func HandleWebSocket(ws *websocket.Conn) {
 			BroadcastGameMove(lobby, ws, msg)
 		case "ready":
 			// Mark the player as ready
+			// add player to ReadyPlayers map
+			// TODO!- add support for unready and check bool values
 			lobby.State.ReadyPlayers[player.ID] = true
 
 			// Check if both players are ready to start the game
@@ -157,6 +158,8 @@ func HandleWebSocket(ws *websocket.Conn) {
 				startGameMsg := map[string]interface{}{
 					"type": "startGame",
 				}
+
+				// send statGame message to all Conns in the lobby
 				for _, conn := range lobby.Conns {
 					sendJSON(conn, startGameMsg)
 				}
@@ -167,19 +170,30 @@ func HandleWebSocket(ws *websocket.Conn) {
 					"sender": "GAMEMASTER",
 					"text":   "Both players are ready. The game will start now!",
 				})
-
-				// Start the game logic here (or broadcast start game state)
 			}
 		}
 	}
+}
 
-	// Clean up connection on disconnect
-	RemoveConnection(lobby, ws)
-	BroadcastLobbyState(lobby)
+////// ------------------------------------------------------------------------------------------------------------- Helpers
+
+// broadcast state to a newly connected user when they first connect to the lobby
+func HandleInitialConnection(ws *websocket.Conn, lobby *models.Lobby) {
+	initialState := struct {
+		Type  string             `json:"type"`
+		State *models.LobbyState `json:"state"`
+	}{
+		Type:  "initialState",
+		State: lobby.State,
+	}
+
+	websocket.JSON.Send(ws, initialState)
 }
 
 // Helper function to send a JSON message over the WebSocket
+// used for sending to individial client instead of all clients
 func sendJSON(ws *websocket.Conn, msg map[string]interface{}) {
+	// convert go map data structure into a json-formatted string
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
 		log.Println("Error marshalling JSON:", err)
@@ -190,6 +204,7 @@ func sendJSON(ws *websocket.Conn, msg map[string]interface{}) {
 	}
 }
 
+// updates all connected clients with the current lobby state
 func BroadcastLobbyState(lobby *models.Lobby) {
 	state := struct {
 		Type  string             `json:"type"`
@@ -205,7 +220,7 @@ func BroadcastLobbyState(lobby *models.Lobby) {
 	}
 }
 
-///----------------------- CHAT
+////// ------------------------------------------------------------------------------------------------------------- Chat Helpers
 
 func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
 	fmt.Printf("Broadcasting chat message: %+v\n", msg)
@@ -230,7 +245,7 @@ func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
 	}
 }
 
-// --------------------------- GAME
+////// ------------------------------------------------------------------------------------------------------------- Game Helpers
 
 func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]interface{}) {
 	// Log the incoming move message
@@ -241,11 +256,12 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 
 	// Extract the move details
 	rawPosition := msg["position"].(float64)
+	// convert based on format game needs
+	// TODO! - update so that game and data coming from server have matching types
 	positionAsInt := int(rawPosition)
 	symbol := msg["symbol"].(string)
-	// position := int(msg["position"].(float64))
 
-	// Make the move
+	// check if game accepts incoming move as a valid one, then execute logic
 	if game.MakeMove(positionAsInt, symbol) {
 
 		// !NOTE - proper sequence of events:
@@ -257,6 +273,7 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 		// Log successful move
 		log.Printf("Move made at position %d by symbol %s", positionAsInt, symbol)
 
+		// update gameboard in LobbyState
 		lobby.State.GameBoard[positionAsInt] = symbol
 
 		// Broadcast the move to all players (UI update)
@@ -267,6 +284,7 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 			}
 		}
 
+		// handle outcome of move (win, stalemate or standard move)
 		winPatterns := game.CheckWin(symbol)
 		if len(winPatterns) > 0 { // Check for a win
 			winMsg := map[string]interface{}{
@@ -304,27 +322,6 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 		}
 		if err := websocket.JSON.Send(ws, errorMsg); err != nil {
 			log.Printf("Error sending invalid move message: %v", err)
-		}
-	}
-}
-
-func HandleInitialConnection(ws *websocket.Conn, lobby *models.Lobby) {
-	initialState := struct {
-		Type  string             `json:"type"`
-		State *models.LobbyState `json:"state"`
-	}{
-		Type:  "initialState",
-		State: lobby.State,
-	}
-
-	websocket.JSON.Send(ws, initialState)
-}
-
-func RemoveConnection(lobby *models.Lobby, conn *websocket.Conn) {
-	for i, c := range lobby.Conns {
-		if c == conn {
-			lobby.Conns = append(lobby.Conns[:i], lobby.Conns[i+1:]...)
-			break
 		}
 	}
 }

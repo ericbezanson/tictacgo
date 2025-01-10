@@ -18,7 +18,6 @@
         <div id="ready-toggle">
             <span>Ready up </span>
             <input onclick="toggleReady()" type="checkbox">
-            <button id="ready-button">Ready Up</button> <!-- Add this button element -->
         </div>
     </div>
 
@@ -208,9 +207,7 @@
         // Handle the "Ready Up" toggle
         function toggleReady() {
             isReady = !isReady;
-            const button = document.querySelector("#ready-toggle button");
-            button.textContent = isReady ? "Cancel Ready" : "Ready Up";
-
+ 
             // Send the readiness status to the server
             ws.send(JSON.stringify({
                 type: "ready",

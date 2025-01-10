@@ -13,7 +13,6 @@ document.addEventListener("DOMContentLoaded", () => {
         fetch("/lobbies")
             .then((response) => response.json())
             .then((data) => {
-                console.log("DATA", data);
                 lobbyList.innerHTML = "";
     
                 // Check the structure of the data to prevent errors
@@ -24,7 +23,6 @@ document.addEventListener("DOMContentLoaded", () => {
     
                 data.forEach((lobby) => {
                     if (lobby && lobby.Name && Array.isArray(lobby.Players)) {
-                        const playerCount = lobby.Players.length;
                         const playerNames = lobby.Players.map(player => player.Name).join(", ");
                         const li = document.createElement("li");
                         li.innerHTML = `${lobby.Name} (${playerNames}/${lobby.MaxPlayers}) 
