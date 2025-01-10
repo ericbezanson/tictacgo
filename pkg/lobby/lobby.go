@@ -35,20 +35,25 @@ func CreateLobby(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetLobbies(w http.ResponseWriter, r *http.Request) {
-
-	// A slice openLobbies is created
 	var openLobbies []*models.Lobby
 
-	// all the lobbies from the models.Lobbies map are added to above slice.
 	for _, lobby := range models.Lobbies {
 		openLobbies = append(openLobbies, lobby)
 	}
 
-	// sets the response's content type to application/json, indicating that the response will contain JSON data.
 	w.Header().Set("Content-Type", "application/json")
 
-	// encodes the openLobbies slice into JSON format and sends it as the response to the client.
-	json.NewEncoder(w).Encode(openLobbies)
+	if len(openLobbies) == 0 {
+		// Return an empty array if no lobbies exist
+		w.Write([]byte("[]"))
+		return
+	}
+
+	err := json.NewEncoder(w).Encode(openLobbies)
+	if err != nil {
+		http.Error(w, "Failed to fetch lobbies", http.StatusInternalServerError)
+		return
+	}
 }
 
 func ServeLobby(w http.ResponseWriter, r *http.Request) {
