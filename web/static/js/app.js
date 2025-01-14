@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .then((response) => response.json())
             .then((data) => {
                 lobbyList.innerHTML = "";
-    
+                console.log("RESP", data)
                 // Check the structure of the data to prevent errors
                 if (!Array.isArray(data)) {
                     console.error("Expected an array of lobbies, but got:", data);

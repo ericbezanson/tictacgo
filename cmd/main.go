@@ -9,12 +9,16 @@ import (
 	"os/signal" //Allows the program to intercept and handle OS signals.
 	"tictacgo/api/handlers"
 	"tictacgo/pkg/lobby"
+	"tictacgo/pkg/redis"
 	"time" // Provides functionality for measuring and displaying time.
 
 	"golang.org/x/net/websocket"
 )
 
 func main() {
+	// Initialize Redis
+	redis.Init()
+
 	// Serve static files from "web/templates"
 	http.Handle("/", http.FileServer(http.Dir("./web/templates")))
 
