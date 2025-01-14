@@ -6,13 +6,61 @@ import (
 	"log"
 	"tictacgo/pkg/models"
 
+	"github.com/go-redis/redis"
 	"github.com/google/uuid"
 	"golang.org/x/net/websocket"
 )
 
+// redis client
+var redisClient *redis.Client
+
 // globals
 // store active game lobbies in a map, a map in go is used to store key value pairs, dictionary-like
 var Lobbies = make(map[string]*models.Lobby)
+
+func init() {
+	// Initialize Redis client
+	redisClient = redis.NewClient(&redis.Options{
+		Addr: "localhost:6379", // Change to your Redis server address
+	})
+
+	fmt.Println(redisClient)
+}
+
+// SaveLobbyState saves the lobby state to Redis
+func SaveLobbyState(lobbyID string, lobbyState *models.LobbyState) error {
+	stateJSON, err := json.Marshal(lobbyState)
+	if err != nil {
+		return err
+	}
+
+	err = redisClient.Set("lobby:"+lobbyID, stateJSON, 0).Err()
+	fmt.Println("savelobbystate", stateJSON)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// LoadLobbyState loads the lobby state from Redis
+func LoadLobbyState(lobbyID string) (*models.LobbyState, error) {
+	stateJSON, err := redisClient.Get("lobby:" + lobbyID).Result() // No context needed here
+	if err == redis.Nil {
+		return nil, nil // No state found, return nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	var lobbyState models.LobbyState
+	err = json.Unmarshal([]byte(stateJSON), &lobbyState)
+	fmt.Println("loadlobbystate", stateJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	return &lobbyState, nil
+}
 
 // HandleWebSocket - Handle WebSocket connection
 // manages Chat, Moves, Ready Messages, and Game State
@@ -84,6 +132,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 			"text":   fmt.Sprintf("Player %s has joined the game!", symbol),
 		})
 
+		// save to redis
 		// Broadcast lobby state and notify other players
 		BroadcastLobbyState(lobby)
 	} else {
@@ -179,15 +228,34 @@ func HandleWebSocket(ws *websocket.Conn) {
 
 // broadcast state to a newly connected user when they first connect to the lobby
 func HandleInitialConnection(ws *websocket.Conn, lobby *models.Lobby) {
-	initialState := struct {
-		Type  string             `json:"type"`
-		State *models.LobbyState `json:"state"`
-	}{
-		Type:  "initialState",
-		State: lobby.State,
+
+	severLobbyState, err := LoadLobbyState(lobby.ID)
+
+	fmt.Println("SERVER LOBBY STATE", severLobbyState)
+	if severLobbyState != nil {
+		networkState := struct {
+			Type  string             `json:"type"`
+			State *models.LobbyState `json:"state"`
+		}{
+			Type:  "initialState",
+			State: lobby.State,
+		}
+		websocket.JSON.Send(ws, networkState)
+	} else {
+		localState := struct {
+			Type  string             `json:"type"`
+			State *models.LobbyState `json:"state"`
+		}{
+			Type:  "initialState",
+			State: lobby.State,
+		}
+		websocket.JSON.Send(ws, localState)
 	}
 
-	websocket.JSON.Send(ws, initialState)
+	if err != nil {
+		log.Println("Error loading lobbystate:", err)
+		return
+	}
 }
 
 // Helper function to send a JSON message over the WebSocket
@@ -235,7 +303,8 @@ func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
 	} else {
 		fmt.Println("Lobby state is nil. Cannot append chat message.")
 	}
-
+	// save to redis
+	SaveLobbyState(lobby.ID, lobby.State)
 	for _, conn := range lobby.Conns {
 		if err := websocket.JSON.Send(conn, msg); err != nil {
 			fmt.Printf("Error broadcasting message to %v: %v\n", conn.Request().RemoteAddr, err)
@@ -276,6 +345,8 @@ func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]i
 		// update gameboard in LobbyState
 		lobby.State.GameBoard[positionAsInt] = symbol
 
+		// save to redis
+		SaveLobbyState(lobby.ID, lobby.State)
 		// Broadcast the move to all players (UI update)
 		for _, conn := range lobby.Conns {
 			if err := websocket.JSON.Send(conn, msg); err != nil {
