@@ -136,3 +136,10 @@ func ServeLobby(w http.ResponseWriter, r *http.Request) {
 	// Render the lobby.html template and pass the lobby object to it.
 	tmpl.Execute(w, lobby)
 }
+func clearLobbyConnections() {
+	fmt.Println("Clearing Lobby Connections...", len(models.Lobbies))
+	err := redis.UpdateLobby()
+	if err != nil {
+		fmt.Printf("Failed to update lobby %s in Redis: %v", err)
+	}
+}

@@ -8,7 +8,6 @@ import (
 	"tictacgo/pkg/models"
 	"tictacgo/pkg/redis"
 
-	"github.com/google/uuid"
 	"golang.org/x/net/websocket"
 )
 
@@ -19,12 +18,12 @@ var ctx = context.Background()
 
 // SaveLobbyState saves the lobby state to Redis
 func SaveLobbyState(lobbyID string, lobby *models.Lobby) error {
-	debugLobbyData, err := json.MarshalIndent(models.Lobbies[lobbyID], "", "  ")
-	if err != nil {
-		fmt.Println("Error marshalling lobby data:", err)
-	} else {
-		fmt.Println("Lobby details from REDIS:", string(debugLobbyData))
-	}
+	// debugLobbyData, err := json.MarshalIndent(models.Lobbies[lobbyID], "", "  ")
+	// if err != nil {
+	// 	fmt.Println("Error marshalling lobby data:", err)
+	// } else {
+	// 	fmt.Println("Lobby details from REDIS:", string(debugLobbyData))
+	// }
 	stateJSON, err := json.Marshal(models.Lobbies[lobbyID])
 	if err != nil {
 		return err
@@ -41,10 +40,18 @@ func SaveLobbyState(lobbyID string, lobby *models.Lobby) error {
 // LoadLobbyState loads the lobby state from Redis
 func LoadLobbyState(lobbyID string) (*models.LobbyState, error) {
 	stateJSON, err := redis.Client.Get(ctx, "lobby:"+lobbyID).Result()
+	debugLobbyData, err := json.MarshalIndent(models.Lobbies[lobbyID], "", "  ")
+
+	if err != nil {
+		fmt.Println("Error marshalling lobby data:", err)
+	} else {
+		fmt.Println("Lobby details from REDIS:", string(debugLobbyData))
+	}
 	if err != nil {
 		return nil, err
 	}
 
+	fmt.Println("lobby:%s", lobbyID)
 	var lobbyState models.LobbyState
 	err = json.Unmarshal([]byte(stateJSON), &lobbyState)
 	if err != nil {
@@ -57,7 +64,6 @@ func LoadLobbyState(lobbyID string) (*models.LobbyState, error) {
 // HandleWebSocket - Handle WebSocket connection
 // manages Chat, Moves, Ready Messages, and Game State
 func HandleWebSocket(ws *websocket.Conn) {
-
 	////// ------------------------------------------------------------------------------------------------------------- SETUP
 
 	// Extract lobby ID from the query string
@@ -72,18 +78,14 @@ func HandleWebSocket(ws *websocket.Conn) {
 	}
 
 	// Retrieve the lobby from the Lobbies map and check if it exists
-	// looked up by using the lobby ID as the map key
 	lobby, exists := models.Lobbies[lobbyID]
-
-	fmt.Println("ID is: ", lobbyID)
-	fmt.Println("lobbyyyyy", models.Lobbies[lobbyID])
 
 	// if lobby exists but state is nil, init a new state with an empty gameboard
 	if exists && lobby.State == nil {
 		lobby.State = &models.LobbyState{
 			GameBoard:    [9]string{},
 			ChatMessages: []models.Message{},
-			Players:      []string{},
+			Players:      []models.Player{},
 			ReadyPlayers: map[string]bool{}, // Track readiness of players
 		}
 	}
@@ -91,83 +93,16 @@ func HandleWebSocket(ws *websocket.Conn) {
 	// Log the check result for debugging
 	fmt.Printf("Lobby exists: %v Lobby data: %+v\n", exists, lobby)
 
-	debugLobbyData, err := json.MarshalIndent(models.Lobbies[lobbyID], "", "  ")
-	if err != nil {
-		fmt.Println("Error marshalling lobby data:", err)
-	} else {
-		fmt.Println("Lobby details from REDIS:", string(debugLobbyData))
-	}
-
-	////// ------------------------------------------------------------------------------------------------------------- Player Assign
-
-	// Proceed with assigning players to the lobby
-	playerID := uuid.New().String()
-	// A new player object is created with this unique ID, using Player struct in models.go
-	player := &models.Player{ID: playerID}
-
-	// Check the number of players in the lobby to assign roles
-	if len(lobby.Players) < 2 {
-		// Assign the first two players as "X" and "O"
-		symbol := "X"
-		if len(lobby.Players) == 1 {
-			symbol = "O"
-		}
-		player.Symbol = symbol
-		player.Name = fmt.Sprintf("Player %s", symbol)
-		lobby.Players = append(lobby.Players, player)
-
-		// Prepare and send the message to individual player
-		// used for displaying a players username only in their client
-		gameMasterMsg := map[string]interface{}{
-			"type":     "assignPlayer",
-			"userName": player.Name,
-			"symbol":   player.Symbol,
-		}
-
-		// send to individual users client
-		sendJSON(ws, gameMasterMsg)
-
-		// Notify all about the new player joining
-		BroadcastChatMessage(lobby, map[string]interface{}{
-			"type":   "chat",
-			"sender": "GAMEMASTER",
-			"text":   fmt.Sprintf("Player %s has joined the game!", symbol),
-		})
-
-		// save to redis
-		// Broadcast lobby state and notify other players
-		BroadcastLobbyState(lobby)
-	} else {
-		// Assign additional connections as spectators
-		player.Symbol = "S" // Spectator symbol
-		player.Name = fmt.Sprintf("Spectator %d", len(lobby.Players)-1)
-		lobby.Players = append(lobby.Players, player)
-
-		// Prepare and send the message to the spectator
-		// used to populate text in lobby full alert message
-		msg := map[string]interface{}{
-			"type":     "lobbyFull",
-			"userName": player.Name,
-			"text":     "The lobby is full, you are now spectating.",
-		}
-		// send to specific ws Conn
-		sendJSON(ws, msg)
-
-		// Notify all about the new spectator joining
-		BroadcastChatMessage(lobby, map[string]interface{}{
-			"type":   "chat",
-			"sender": "GAMEMASTER",
-			"text":   fmt.Sprintf("Spectator %d is now spectating!", len(lobby.Players)-1),
-		})
-
-		// Broadcast lobby state and notify other players
-		BroadcastLobbyState(lobby)
-	}
+	// debugLobbyData, err := json.MarshalIndent(models.Lobbies[lobbyID], "", "  ")
+	// if err != nil {
+	// 	fmt.Println("Error marshalling lobby data:", err)
+	// } else {
+	// 	fmt.Println("Lobby details from REDIS:", string(debugLobbyData))
+	// }
 
 	// Add the WebSocket connection to the lobby
 	lobby.Conns = append(lobby.Conns, ws)
 
-	//!TODO - investigate ways to simplify this into one function, avoid race
 	// Send the current state to the newly connected client
 	HandleInitialConnection(ws, lobby)
 
@@ -192,6 +127,90 @@ func HandleWebSocket(ws *websocket.Conn) {
 		////// ------------------------------------------------------------------------------------------------------------- Player Actions
 		// Handle message based on its type
 		switch msgType {
+		case "open":
+
+			// Extract playerID from the message
+			playerID, ok := msg["playerID"].(string)
+			if !ok {
+				fmt.Println("Error: PlayerID not found in open message")
+				continue
+			}
+
+			// Check if the playerID already exists in the Players array
+			foundExistingPlayer := false
+			fmt.Println("lobby players", lobby)
+			for _, existingPlayer := range lobby.State.Players { // Iterate over models.Player objects
+				fmt.Println("existingPlayerID", existingPlayer.ID)
+				fmt.Println("Player", playerID)
+				if existingPlayer.ID == playerID { // Compare player IDs
+					foundExistingPlayer = true
+					break
+				}
+			}
+
+			// If playerID exists, reuse the existing player object
+			if foundExistingPlayer {
+				fmt.Printf("Player %s reconnected\n", playerID)
+				continue // No need to re-assign player symbol or name
+			}
+
+			fmt.Println("existing player", foundExistingPlayer)
+			// If playerID doesn't exist, proceed with assigning players
+			player := &models.Player{ID: playerID}
+
+			if len(lobby.Players) < 2 {
+				// Assign the first two players as "X" and "O"
+				symbol := "X"
+				if len(lobby.Players) == 1 {
+					symbol = "O"
+				}
+				player.Symbol = symbol
+				player.Name = fmt.Sprintf("%s (%s)", playerID, symbol)
+				lobby.Players = append(lobby.Players, *player)
+
+				// Prepare and send the message to individual player
+				gameMasterMsg := map[string]interface{}{
+					"type":     "assignPlayer",
+					"userName": player.Name,
+					"symbol":   player.Symbol,
+				}
+				sendJSON(ws, gameMasterMsg)
+
+				// Notify all about the new player joining
+				BroadcastChatMessage(lobby, map[string]interface{}{
+					"type":   "chat",
+					"sender": "GAMEMASTER",
+					"text":   fmt.Sprintf("Player %s has joined the game!", symbol),
+				})
+
+				// save to redis
+				// Broadcast lobby state and notify other players
+				BroadcastLobbyState(lobby)
+			} else {
+				// Assign additional connections as spectators
+				player.Symbol = "S" // Spectator symbol
+				player.Name = fmt.Sprintf("%v (Spectator)", playerID)
+				lobby.Players = append(lobby.Players, *player)
+
+				// Prepare and send the message to the spectator
+				msg := map[string]interface{}{
+					"type":     "lobbyFull",
+					"userName": player.Name,
+					"text":     "The lobby is full, you are now spectating.",
+				}
+				sendJSON(ws, msg)
+
+				// Notify all about the new spectator joining
+				BroadcastChatMessage(lobby, map[string]interface{}{
+					"type":   "chat",
+					"sender": "GAMEMASTER",
+					"text":   fmt.Sprintf("%v is now spectating!", player.Name),
+				})
+
+				// Broadcast lobby state and notify other players
+				BroadcastLobbyState(lobby)
+			}
+
 		case "chat":
 			BroadcastChatMessage(lobby, msg)
 		case "move":
@@ -200,28 +219,28 @@ func HandleWebSocket(ws *websocket.Conn) {
 			// Mark the player as ready
 			// add player to ReadyPlayers map
 			// TODO!- add support for unready and check bool values
-			lobby.State.ReadyPlayers[player.ID] = true
+			// lobby.State.ReadyPlayers[player.ID] = true
 
-			// Check if both players are ready to start the game
-			if len(lobby.State.ReadyPlayers) == 2 {
+			// // Check if both players are ready to start the game
+			// if len(lobby.State.ReadyPlayers) == 2 {
 
-				// Broadcast startGame message to all connected clients
-				startGameMsg := map[string]interface{}{
-					"type": "startGame",
-				}
+			// 	// Broadcast startGame message to all connected clients
+			// 	startGameMsg := map[string]interface{}{
+			// 		"type": "startGame",
+			// 	}
 
-				// send statGame message to all Conns in the lobby
-				for _, conn := range lobby.Conns {
-					sendJSON(conn, startGameMsg)
-				}
+			// 	// send statGame message to all Conns in the lobby
+			// 	for _, conn := range lobby.Conns {
+			// 		sendJSON(conn, startGameMsg)
+			// 	}
 
-				// Notify both players that the game is ready to start
-				BroadcastChatMessage(lobby, map[string]interface{}{
-					"type":   "startGame",
-					"sender": "GAMEMASTER",
-					"text":   "Both players are ready. The game will start now!",
-				})
-			}
+			// 	// Notify both players that the game is ready to start
+			// 	BroadcastChatMessage(lobby, map[string]interface{}{
+			// 		"type":   "startGame",
+			// 		"sender": "GAMEMASTER",
+			// 		"text":   "Both players are ready. The game will start now!",
+			// 	})
+			// }
 		}
 	}
 }
@@ -233,7 +252,6 @@ func HandleInitialConnection(ws *websocket.Conn, lobby *models.Lobby) {
 
 	severLobbyState, err := LoadLobbyState(lobby.ID)
 
-	fmt.Println("SERVER LOBBY STATE", severLobbyState)
 	if severLobbyState != nil {
 		networkState := struct {
 			Type  string             `json:"type"`
@@ -293,7 +311,6 @@ func BroadcastLobbyState(lobby *models.Lobby) {
 ////// ------------------------------------------------------------------------------------------------------------- Chat Helpers
 
 func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
-	fmt.Println("TEST BREAK")
 	fmt.Printf("Broadcasting chat message: %+v\n", msg)
 	chatMessage := models.Message{
 		Type:   msg["type"].(string),
@@ -310,7 +327,6 @@ func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
 
 	SaveLobbyState(lobby.ID, lobby)
 	for _, conn := range lobby.Conns {
-		fmt.Println("CONN", conn)
 		if err := websocket.JSON.Send(conn, msg); err != nil {
 			fmt.Printf("Error broadcasting message to %v: %v\n", conn.Request().RemoteAddr, err)
 		} else {

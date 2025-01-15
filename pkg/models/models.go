@@ -22,7 +22,7 @@ type Lobby struct {
 	ID         string
 	Name       string
 	MaxPlayers int
-	Players    []*Player
+	Players    []Player          // Change to []models.Player
 	Conns      []*websocket.Conn // Add this field to track active WebSocket connections
 	Game       *game.Game
 	State      *LobbyState
@@ -51,7 +51,7 @@ type LobbyState struct {
 	CurrentTurn  string          `json:"currentTurn"` // current players turn
 	GameStarted  bool            `json:"gameStarted"`
 	ChatMessages []Message       `json:"chatMessages"` // chat logs
-	Players      []string        `json:"players"`      // current connected players
+	Players      []Player        // Change to []models.Player to store full Player objects
 	ReadyPlayers map[string]bool `json:"readyPlayers"` // map to track players' readiness
 
 }

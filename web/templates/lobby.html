@@ -55,7 +55,32 @@
 
         // WebSocket connection opened
         ws.onopen = () => {
-            console.log("WebSocket connection established");
+            console.log("Connected to WebSocket");
+
+            // Check for existing playerID in local storage
+            const storedPlayerID = localStorage.getItem("TTGplayerID");
+
+            // Generate random player ID if not found
+            let playerID;
+            if (!storedPlayerID) {
+                const randomAnimalIndex = Math.floor(Math.random() * animals.length);
+                const randomAnimal = animals[randomAnimalIndex];
+                const randomNumber = Math.floor(Math.random() * 99) + 1; // Generate random number between 1-99
+                playerID = `${randomAnimal}-${randomNumber}`;
+
+                // Store playerID in local storage
+                localStorage.setItem("TTGplayerID", playerID);
+            } else {
+                playerID = storedPlayerID;
+            }
+
+            // Send playerID and lobbyID in a message to the server
+
+            ws.send(JSON.stringify({
+                type: "open", // Assuming the server expects this type for joining
+                playerID,
+                lobbyID,
+            }));
         };
 
         // WebSocket connection error
@@ -207,7 +232,7 @@
         // Handle the "Ready Up" toggle
         function toggleReady() {
             isReady = !isReady;
- 
+
             // Send the readiness status to the server
             ws.send(JSON.stringify({
                 type: "ready",
@@ -251,6 +276,199 @@
             });
         }
 
+        const animals = [
+            "Aardvark",
+            "Albatross",
+            "Alligator",
+            "Alpaca",
+            "Ant",
+            "Anteater",
+            "Antelope",
+            "Ape",
+            "Armadillo",
+            "Donkey",
+            "Baboon",
+            "Badger",
+            "Barracuda",
+            "Bat",
+            "Bear",
+            "Beaver",
+            "Bee",
+            "Bison",
+            "Boar",
+            "Buffalo",
+            "Butterfly",
+            "Camel",
+            "Capybara",
+            "Caribou",
+            "Cat",
+            "Caterpillar",
+            "Cheetah",
+            "Chicken",
+            "Chimpanzee",
+            "Chinchilla",
+            "Clam",
+            "Cobra",
+            "Cockroach",
+            "Coyote",
+            "Crab",
+            "Crane",
+            "Crocodile",
+            "Crow",
+            "Deer",
+            "Dinosaur",
+            "Dog",
+            "Dolphin",
+            "Dove",
+            "Dragonfly",
+            "Duck",
+            "Eagle",
+            "Eel",
+            "Eland",
+            "Elephant",
+            "Elk",
+            "Emu",
+            "Falcon",
+            "Ferret",
+            "Fish",
+            "Flamingo",
+            "Fly",
+            "Fox",
+            "Frog",
+            "Gazelle",
+            "Gerbil",
+            "Giraffe",
+            "Gnat",
+            "Goat",
+            "Goldfish",
+            "Goose",
+            "Gorilla",
+            "Grasshopper",
+            "Gull",
+            "Hamster",
+            "Hare",
+            "Hawk",
+            "Hedgehog",
+            "Heron",
+            "Herring",
+            "Hippopotamus",
+            "Hornet",
+            "Horse",
+            "Hummingbird",
+            "Hyena",
+            "Ibex",
+            "Ibis",
+            "Jackal",
+            "Jaguar",
+            "Jellyfish",
+            "Kangaroo",
+            "Kingfisher",
+            "Koala",
+            "Kudu",
+            "Lark",
+            "Lemur",
+            "Leopard",
+            "Lion",
+            "Llama",
+            "Lobster",
+            "Locust",
+            "Louse",
+            "Magpie",
+            "Manatee",
+            "Mantis",
+            "Meerkat",
+            "Mink",
+            "Mole",
+            "Mongoose",
+            "Monkey",
+            "Moose",
+            "Mosquito",
+            "Mouse",
+            "Mule",
+            "Narwhal",
+            "Newt",
+            "Nightingale",
+            "Octopus",
+            "Okapi",
+            "Opossum",
+            "Oryx",
+            "Ostrich",
+            "Otter",
+            "Owl",
+            "Oyster",
+            "Panther",
+            "Parrot",
+            "Partridge",
+            "Peafowl",
+            "Pelican",
+            "Penguin",
+            "Pheasant",
+            "Pig",
+            "Pigeon",
+            "Pony",
+            "Porcupine",
+            "Porpoise",
+            "Quail",
+            "Quelea",
+            "Quetzal",
+            "Rabbit",
+            "Raccoon",
+            "Rail",
+            "Ram",
+            "Rat",
+            "Raven",
+            "RedDeer",
+            "RedPanda",
+            "Reindeer",
+            "Rhinoceros",
+            "Rook",
+            "Salamander",
+            "Salmon",
+            "Sardine",
+            "Scorpion",
+            "Seahorse",
+            "Seal",
+            "Shark",
+            "Sheep",
+            "Shrew",
+            "Skunk",
+            "Snail",
+            "Snake",
+            "Sparrow",
+            "Spider",
+            "Spoonbill",
+            "Squid",
+            "Squirrel",
+            "Starling",
+            "Stingray",
+            "Stinkbug",
+            "Stork",
+            "Swan",
+            "Tapir",
+            "Tarsier",
+            "Termite",
+            "Tiger",
+            "Toad",
+            "Trout",
+            "Turkey",
+            "Turtle",
+            "Viper",
+            "Vulture",
+            "Wallaby",
+            "Walrus",
+            "Wasp",
+            "Weasel",
+            "Whale",
+            "Wildcat",
+            "Wolf",
+            "Wolverine",
+            "Wombat",
+            "Woodpecker",
+            "Worm",
+            "Wren",
+            "Yak",
+            "Zebra"
+        ]
     </script>
 
 </body>
