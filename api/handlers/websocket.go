@@ -94,15 +94,21 @@ func HandleWebSocket(ws *websocket.Conn) {
 	// Log the check result for debugging
 	fmt.Printf("Lobby exists: %v Lobby data: %+v\n", exists, lobby)
 
-	// debugLobbyData, err := json.MarshalIndent(models.Lobbies[lobbyID], "", "  ")
-	// if err != nil {
-	// 	fmt.Println("Error marshalling lobby data:", err)
-	// } else {
-	// 	fmt.Println("Lobby details from REDIS:", string(debugLobbyData))
-	// }
+	// Check if the connection already exists in the Conns array
+	connectionExists := false
+	for _, conn := range lobby.Conns {
+		if conn == ws {
+			connectionExists = true
+			break
+		}
+	}
 
-	// Add the WebSocket connection to the lobby
-	lobby.Conns = append(lobby.Conns, ws)
+	if !connectionExists {
+		// Add the WebSocket connection to the lobby if it doesn't already exist
+		lobby.Conns = append(lobby.Conns, ws)
+	} else {
+		log.Println("Connection already exists in the lobby.")
+	}
 
 	// Send the current state to the newly connected client
 	HandleInitialConnection(ws, lobby)
@@ -144,7 +150,6 @@ func HandleWebSocket(ws *websocket.Conn) {
 				fmt.Println("existingPlayerID", existingPlayer)
 				fmt.Println("Player", playerID)
 				if existingPlayer.ID == playerID { // Compare player IDs
-					fmt.Println("existing player found, welcome back! %d", existingPlayer.ID)
 					// Prepare and send the message to individual player
 					gameMasterMsg := map[string]interface{}{
 						"type":     "assignPlayer",
@@ -154,6 +159,12 @@ func HandleWebSocket(ws *websocket.Conn) {
 					sendJSON(ws, gameMasterMsg)
 
 					foundExistingPlayer = true
+
+					BroadcastChatMessage(lobby, map[string]interface{}{
+						"type":   "chat",
+						"sender": "GAMEMASTER",
+						"text":   fmt.Sprintf("welcome back %s", existingPlayer.Name),
+					})
 					break
 				}
 			}
@@ -192,12 +203,9 @@ func HandleWebSocket(ws *websocket.Conn) {
 				BroadcastChatMessage(lobby, map[string]interface{}{
 					"type":   "chat",
 					"sender": "GAMEMASTER",
-					"text":   fmt.Sprintf("Player %s has joined the game!", symbol),
+					"text":   fmt.Sprintf("%s has joined the game!, playing as %s", player.Name, symbol),
 				})
 
-				// save to redis
-				// Broadcast lobby state and notify other players
-				BroadcastLobbyState(lobby)
 			} else {
 				// Assign additional connections as spectators
 				player.Symbol = "S" // Spectator symbol
@@ -318,7 +326,9 @@ func BroadcastLobbyState(lobby *models.Lobby) {
 	fmt.Println("Lobby Conns", lobby.Conns)
 	// Send state to all connected clients
 	for _, conn := range lobby.Conns {
-		websocket.JSON.Send(conn, state)
+		if err := websocket.JSON.Send(conn, state); err != nil {
+			fmt.Printf("Error sending state to connection: %v\n", err)
+		}
 	}
 }
 

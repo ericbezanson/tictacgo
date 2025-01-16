@@ -64,11 +64,6 @@ func GetLobbies(w http.ResponseWriter, r *http.Request) {
 		models.Lobbies[lobby.ID] = &lobby
 	}
 
-	// Include existing in-memory lobbies
-	for _, lobby := range models.Lobbies {
-		openLobbies = append(openLobbies, lobby)
-	}
-
 	// Check for errors from the iterator
 	if err := iter.Err(); err != nil {
 		http.Error(w, "Failed to iterate Redis keys", http.StatusInternalServerError)

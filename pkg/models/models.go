@@ -22,7 +22,6 @@ type Lobby struct {
 	ID         string
 	Name       string
 	MaxPlayers int
-	Players    []Player          // Change to []models.Player
 	Conns      []*websocket.Conn // Add this field to track active WebSocket connections
 	Game       *game.Game
 	State      *LobbyState
