@@ -24,8 +24,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
     
                 data.forEach((lobby) => {
-                    if (lobby && lobby.Name && Array.isArray(lobby.Players)) {
-                        const playerNames = lobby.Players.map(player => player.Name).join(", ");
+                    console.log("lobby", lobby)
+                    if (lobby && lobby.Name && Array.isArray(lobby.State.Players)) {
+                        const playerNames = lobby.State.Players.map(player => player.Name).join(", ");
                         const li = document.createElement("li");
                         li.innerHTML = `${lobby.Name} (${playerNames}/${lobby.MaxPlayers}) 
                         <button onclick="joinLobby('${lobby.ID}')">Join</button>`;

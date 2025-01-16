@@ -51,14 +51,14 @@ func GetLobbies(w http.ResponseWriter, r *http.Request) {
 			continue // Key does not exist, continue to the next
 		} else if err != nil {
 			http.Error(w, "Failed to fetch lobbies from Redis", http.StatusInternalServerError)
-			return
+			return // Handle other errors here
 		}
 
 		var lobby models.Lobby
 		err = json.Unmarshal([]byte(lobbyData), &lobby)
 		if err != nil {
 			http.Error(w, "Failed to parse lobby data", http.StatusInternalServerError)
-			return
+			return // Handle parsing errors here
 		}
 		openLobbies = append(openLobbies, &lobby)
 		models.Lobbies[lobby.ID] = &lobby
@@ -68,7 +68,8 @@ func GetLobbies(w http.ResponseWriter, r *http.Request) {
 	for _, lobby := range models.Lobbies {
 		openLobbies = append(openLobbies, lobby)
 	}
-	// Handle any error from the iterator
+
+	// Check for errors from the iterator
 	if err := iter.Err(); err != nil {
 		http.Error(w, "Failed to iterate Redis keys", http.StatusInternalServerError)
 		return

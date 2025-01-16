@@ -18,12 +18,12 @@ var ctx = context.Background()
 
 // SaveLobbyState saves the lobby state to Redis
 func SaveLobbyState(lobbyID string, lobby *models.Lobby) error {
-	// debugLobbyData, err := json.MarshalIndent(models.Lobbies[lobbyID], "", "  ")
-	// if err != nil {
-	// 	fmt.Println("Error marshalling lobby data:", err)
-	// } else {
-	// 	fmt.Println("Lobby details from REDIS:", string(debugLobbyData))
-	// }
+	debugLobbyData, err := json.MarshalIndent(models.Lobbies[lobbyID], "", "  ")
+	if err != nil {
+		fmt.Println("Error marshalling lobby data:", err)
+	} else {
+		fmt.Println("Lobby details from REDIS:", string(debugLobbyData))
+	}
 	stateJSON, err := json.Marshal(models.Lobbies[lobbyID])
 	if err != nil {
 		return err
@@ -51,7 +51,6 @@ func LoadLobbyState(lobbyID string) (*models.LobbyState, error) {
 		return nil, err
 	}
 
-	fmt.Println("lobby:%s", lobbyID)
 	var lobbyState models.LobbyState
 	err = json.Unmarshal([]byte(stateJSON), &lobbyState)
 	if err != nil {
@@ -79,6 +78,8 @@ func HandleWebSocket(ws *websocket.Conn) {
 
 	// Retrieve the lobby from the Lobbies map and check if it exists
 	lobby, exists := models.Lobbies[lobbyID]
+
+	fmt.Println("EXISTS?", exists)
 
 	// if lobby exists but state is nil, init a new state with an empty gameboard
 	if exists && lobby.State == nil {
@@ -138,11 +139,20 @@ func HandleWebSocket(ws *websocket.Conn) {
 
 			// Check if the playerID already exists in the Players array
 			foundExistingPlayer := false
-			fmt.Println("lobby players", lobby)
+			fmt.Println("lobby players", lobby.State.Players)
 			for _, existingPlayer := range lobby.State.Players { // Iterate over models.Player objects
-				fmt.Println("existingPlayerID", existingPlayer.ID)
+				fmt.Println("existingPlayerID", existingPlayer)
 				fmt.Println("Player", playerID)
 				if existingPlayer.ID == playerID { // Compare player IDs
+					fmt.Println("existing player found, welcome back! %d", existingPlayer.ID)
+					// Prepare and send the message to individual player
+					gameMasterMsg := map[string]interface{}{
+						"type":     "assignPlayer",
+						"userName": existingPlayer.Name,
+						"symbol":   existingPlayer.Symbol,
+					}
+					sendJSON(ws, gameMasterMsg)
+
 					foundExistingPlayer = true
 					break
 				}
@@ -151,6 +161,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 			// If playerID exists, reuse the existing player object
 			if foundExistingPlayer {
 				fmt.Printf("Player %s reconnected\n", playerID)
+
 				continue // No need to re-assign player symbol or name
 			}
 
@@ -158,15 +169,16 @@ func HandleWebSocket(ws *websocket.Conn) {
 			// If playerID doesn't exist, proceed with assigning players
 			player := &models.Player{ID: playerID}
 
-			if len(lobby.Players) < 2 {
+			if len(lobby.State.Players) < 2 {
 				// Assign the first two players as "X" and "O"
+				fmt.Println("assing a player", lobby.State.Players)
 				symbol := "X"
-				if len(lobby.Players) == 1 {
+				if len(lobby.State.Players) == 1 {
 					symbol = "O"
 				}
 				player.Symbol = symbol
 				player.Name = fmt.Sprintf("%s (%s)", playerID, symbol)
-				lobby.Players = append(lobby.Players, *player)
+				lobby.State.Players = append(lobby.State.Players, *player)
 
 				// Prepare and send the message to individual player
 				gameMasterMsg := map[string]interface{}{
@@ -190,7 +202,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 				// Assign additional connections as spectators
 				player.Symbol = "S" // Spectator symbol
 				player.Name = fmt.Sprintf("%v (Spectator)", playerID)
-				lobby.Players = append(lobby.Players, *player)
+				lobby.State.Players = append(lobby.State.Players, *player)
 
 				// Prepare and send the message to the spectator
 				msg := map[string]interface{}{
@@ -294,6 +306,7 @@ func sendJSON(ws *websocket.Conn, msg map[string]interface{}) {
 
 // updates all connected clients with the current lobby state
 func BroadcastLobbyState(lobby *models.Lobby) {
+	fmt.Println("BroadcastLobbyState", lobby)
 	state := struct {
 		Type  string             `json:"type"`
 		State *models.LobbyState `json:"state"`
@@ -302,6 +315,7 @@ func BroadcastLobbyState(lobby *models.Lobby) {
 		State: lobby.State,
 	}
 
+	fmt.Println("Lobby Conns", lobby.Conns)
 	// Send state to all connected clients
 	for _, conn := range lobby.Conns {
 		websocket.JSON.Send(conn, state)
