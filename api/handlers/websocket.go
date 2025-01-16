@@ -93,14 +93,15 @@ func HandleWebSocket(ws *websocket.Conn) {
 	// Log the check result for debugging
 	fmt.Printf("Lobby exists: %v Lobby data: %+v\n", exists, lobby)
 
+	// Continuously handle incoming messages
+	lobby.Conns = append(lobby.Conns, ws)
+
 	// Send the current state to the newly connected client
 	HandleInitialConnection(ws, lobby)
 
 	// // Broadcast the updated lobby state
 	// BroadcastLobbyState(lobby)
 
-	// Continuously handle incoming messages
-	lobby.Conns = append(lobby.Conns, ws)
 	for {
 		var msg map[string]interface{}
 		err := websocket.JSON.Receive(ws, &msg)
