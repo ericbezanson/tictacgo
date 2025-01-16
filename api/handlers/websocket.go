@@ -47,6 +47,7 @@ func LoadLobbyState(lobbyID string) (*models.LobbyState, error) {
 	// } else {
 	// 	fmt.Println("Lobby details from REDIS:", string(debugLobbyData))
 	// }
+	// fmt.Println("stateJSON", stateJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +100,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 	// BroadcastLobbyState(lobby)
 
 	// Continuously handle incoming messages
+	lobby.Conns = append(lobby.Conns, ws)
 	for {
 		var msg map[string]interface{}
 		err := websocket.JSON.Receive(ws, &msg)
@@ -130,7 +132,6 @@ func HandleWebSocket(ws *websocket.Conn) {
 			for _, existingPlayer := range lobby.State.Players { // Iterate over models.Player objects
 				if existingPlayer.ID == playerID { // Compare player IDs
 					// Prepare and send the message to individual player
-					lobby.Conns = append(lobby.Conns, ws)
 					gameMasterMsg := map[string]interface{}{
 						"type":     "assignPlayer",
 						"userName": existingPlayer.Name,
@@ -139,6 +140,8 @@ func HandleWebSocket(ws *websocket.Conn) {
 					sendJSON(ws, gameMasterMsg)
 
 					foundExistingPlayer = true
+					// Broadcast lobby state and notify other players
+					BroadcastLobbyState(lobby)
 
 					BroadcastChatMessage(lobby, map[string]interface{}{
 						"type":   "chat",
@@ -146,8 +149,6 @@ func HandleWebSocket(ws *websocket.Conn) {
 						"text":   fmt.Sprintf("welcome back %s", existingPlayer.Name),
 					})
 
-					// Broadcast lobby state and notify other players
-					BroadcastLobbyState(lobby)
 					break
 				}
 			}
@@ -194,7 +195,6 @@ func HandleWebSocket(ws *websocket.Conn) {
 				// Assign additional connections as spectators
 				player.Symbol = "S" // Spectator symbol
 				player.Name = fmt.Sprintf("%v (Spectator)", playerID)
-				lobby.Conns = append(lobby.Conns, ws)
 				lobby.State.Players = append(lobby.State.Players, *player)
 
 				// Prepare and send the message to the spectator
@@ -266,15 +266,6 @@ func HandleInitialConnection(ws *websocket.Conn, lobby *models.Lobby) {
 			State: lobby.State,
 		}
 		websocket.JSON.Send(ws, networkState)
-	} else {
-		localState := struct {
-			Type  string             `json:"type"`
-			State *models.LobbyState `json:"state"`
-		}{
-			Type:  "initialState",
-			State: lobby.State,
-		}
-		websocket.JSON.Send(ws, localState)
 	}
 
 	if err != nil {
@@ -314,6 +305,7 @@ func BroadcastLobbyState(lobby *models.Lobby) {
 	fmt.Println("Lobby Conns", lobby.Conns)
 	// Send state to all connected clients
 	for _, conn := range lobby.Conns {
+		fmt.Println("broadcastlobbystate conn", conn)
 		// Log the actual data stored in conn (if possible)
 		connData, err := json.Marshal(conn)
 		if err != nil {
@@ -345,16 +337,28 @@ func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
 		fmt.Println("Lobby state is nil. Cannot append chat message.")
 	}
 
-	// save to redis
-	SaveLobbyState(lobby.ID, lobby)
-	fmt.Println("Save Lobby State, conns", lobby.Conns)
+	fmt.Println("broadcastchatmessage", lobby.Conns)
 	for _, conn := range lobby.Conns {
+		fmt.Println("CONN Loop", lobby.Conns)
+		printConnDetails(conn)
 		if err := websocket.JSON.Send(conn, msg); err != nil {
 			fmt.Printf("Error broadcasting message to %v: %v\n", conn.Request().RemoteAddr, err)
 		} else {
 			fmt.Printf("Successfully sent message to %v: %+v\n", conn.Request().RemoteAddr, msg)
 		}
 	}
+
+	// save to redis
+	SaveLobbyState(lobby.ID, lobby)
+}
+
+func printConnDetails(conn *websocket.Conn) {
+	if conn == nil {
+		fmt.Println("conn is nil")
+		return
+	}
+	fmt.Printf("RemoteAddr: %v\n", conn.Request().RemoteAddr)
+	// Add other relevant fields here (e.g., Subprotocols, WriteChan, etc.)
 }
 
 ////// ------------------------------------------------------------------------------------------------------------- Game Helpers
