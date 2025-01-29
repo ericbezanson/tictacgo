@@ -11,24 +11,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     submitUsernameBtn.addEventListener("click", () => {
-        const inputUsername = usernameInput.value.trim();
+       const inputUsername = usernameInput.value.trim();
         console.log("fired", inputUsername)
-        if (validateUsername(inputUsername)) {
-            username = inputUsername;
-            alert(`Username set to ${username}`);
-            createLobbyBtn.disabled = false;
-            document.querySelectorAll("#lobby-list button").forEach(button => {
-                button.disabled = false;
-            });
-        } else {
-            alert("Invalid username. Please use only letters and numbers (up to 15 characters).");
-        }
+            if (validateUsername(inputUsername)) {
+                username = inputUsername;
+                document.cookie = `username=${username}; path=/`; // Set a cookie for the username
+                alert(`Username set to ${username}`);
+                createLobbyBtn.disabled = false;
+            } else {
+                alert("Invalid username. Please use only letters and numbers (up to 15 characters).");
+            }
+       
     });
 
     if (createLobbyBtn) {
         createLobbyBtn.addEventListener("click", () => {
-            window.location.href = "/create-lobby";
+            const usernameParam = encodeURIComponent(username); // Make sure username is properly encoded
+            window.location.href = `/create-lobby?username=${usernameParam}`;
         });
+        
     }
 
     function fetchLobbies() {
@@ -77,7 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ws = new WebSocket(`ws://localhost:8080/ws?lobby=${lobbyID}`);
 
         ws.onopen = () => {
-            console.log("Connected to WebSocket");
+            console.log("Connected to WebSocket", username);
         };
 
         ws.onmessage = (event) => {

@@ -1,14 +1,14 @@
 const lobbyID = window.location.pathname.split("/")[2];  // Extract lobby ID from URL
-console.log("Connecting to lobby ID:", lobbyID);  // Log to verify
+
 const ws = new WebSocket(`ws://localhost:8080/ws?lobby=${lobbyID}`);
 
-console.log("WebSocket URL:", `ws://localhost:8080/ws?lobby=${lobbyID}`);
 
 // Interface vars
 const gameBoard = document.getElementById("tic-tac-toe");
 const messagesDiv = document.getElementById("messages");
 const playerInfo = document.getElementById("player-info");
 const user = document.getElementById("user")
+const readyToggle = document.getElementById("ready-toggle");
 
 // Initial game values
 let currentPlayer = "X";
@@ -18,15 +18,27 @@ let activePlayer = "X";
 let gameStarted = false;
 let playerTotal = 0;
 let isReady = false;  // Track the player's readiness
+// Local chatMessages array
+let chatMessages = [];
 
 // WebSocket connection opened
 ws.onopen = () => {
-    console.log("WebSocket connection established");
+
+    // Retrieve the username cookie (or any other cookie you need)
+    const usernameCookie = getCookie("username");
+    if (usernameCookie) {
+        // Send the cookie value to the server
+        ws.send(JSON.stringify({
+            type: "setUsername",
+            userName: usernameCookie
+        }));
+    } else {
+        console.log("Username cookie not found.");
+    }
 };
 
 // WebSocket connection error
 ws.onerror = (error) => {
-    log.Printf("WebSocket connection error: %v", err)
     console.log("WebSocket error:", error);
 };
 
@@ -38,94 +50,118 @@ ws.onclose = () => {
 // Handler for messages received from server
 ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    // console.log("Message received:", message);
     console.log("MESSAGE", message)
     switch (message.type) {
 
         case "initialState":
             // Populate game board
-            message.state.gameBoard.forEach((symbol, index) => {
+            message.gameBoard.forEach((symbol, index) => {
                 if (symbol) {
                     gameBoard.children[index].textContent = symbol;
                     gameBoard.children[index].style.pointerEvents = "none";
                 }
             });
 
-            console.log("initial state messages", message.chatMessages)
-            appendChatMessages(message.state.chatMessages);
+            if (message.chatMessages && Array.isArray(message.chatMessages)) {
+                updateChatMessages(message.chatMessages);
+            }
+
 
             break;
 
+
         case "updatePlayers":
+            // Handle chat messages
+            if (message.chatMessages && Array.isArray(message.chatMessages)) {
+                updateChatMessages(message.chatMessages);
+            }
 
-            console.log("update players message", message)
-            appendChatMessages(message.state.chatMessages);
-
+            // Other state updates (e.g., game board, players)
+            // Update gameBoard or other UI elements here
             break;
 
 
         case "lobbyFull":
-            userName = message.userName;
-            user.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
-            alert(message.text);
-            break;
+    userName = message.userName;
+    user.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
+    alert(message.text);
+    break;
 
         case "assignPlayer":
-            userName = message.userName;
-            playerSymbol = message.symbol;
-            user.innerHTML = `YOU ARE PLAYING AS <b>${userName}</b>`;
-            break;
+    userName = message.userName;
+    playerSymbol = message.symbol;
+    user.innerHTML = `YOU ARE PLAYING AS <b>${userName}</b>`;
+    break;
 
         case "startGame":
-            console.log("start game", message)
-            gameStarted = true
+    console.log("start game", message)
+    gameStarted = true
 
         // Handler for player moves
         case "move":
-            // NOTE - proper sequence of events
-            // 1. Listen for the "move" message and update the UI.
-            // 2. Show an alert if the game is won or drawn and reset the board.
-            // 3. Update the turn information after the turn switches.
-            if (typeof message.position === "number" && message.position >= 0) {
-                const cell = gameBoard.children[message.position];
-                if (!cell) {
-                    console.error("Invalid tile position", message.position);
-                    return;
-                }
-                cell.textContent = message.symbol;
-                cell.style.pointerEvents = "none"; // Disable interaction on filled cell
-            } else {
-                console.error("Unexpected message format", message);
-            }
-            break;
+    // NOTE - proper sequence of events
+    // 1. Listen for the "move" message and update the UI.
+    // 2. Show an alert if the game is won or drawn and reset the board.
+    // 3. Update the turn information after the turn switches.
+    if (typeof message.position === "number" && message.position >= 0) {
+        const cell = gameBoard.children[message.position];
+        if (!cell) {
+            console.error("Invalid tile position", message.position);
+            return;
+        }
+        cell.textContent = message.symbol;
+        cell.style.pointerEvents = "none"; // Disable interaction on filled cell
+    } else {
+        console.error("Unexpected message format", message);
+    }
+    break;
 
         case "updateTurn":
-            activePlayer = message.text;
-            break;
-        case "system":
-            messagesDiv.innerHTML += `<p class="system-msg">GAMEMASTER: ${message.text}</p>`;
-            break;
+    activePlayer = message.text;
+    break;
 
         case "chat":
-            messagesDiv.innerHTML += `<p>${message.sender}: ${message.text}</p>`;
-            break;
+    appendChatMessages(message)
+    break;
 
         case "win":
-            gameStarted = false
-            alert(message.text);  // Show the winner
-            resetBoard();  // Reset the game
-            break;
+    gameStarted = false
+    isReady = false
+    alert(message.text);  // Show the winner
 
-        case "reset":
-            resetBoard();
-            break;
+    // Uncheck the "ready-toggle" checkbox
+    readyToggle.checked = false;
+
+    // Send an "unready" message through the WebSocket
+    ws.send(JSON.stringify({
+        type: "unready",
+        userName: userName
+    }));
+    resetBoard();  // Reset the game
+    break;
+
+        case "draw":
+    gameStarted = false
+    isReady = false
+    alert(message.text);  // Show the winner
+
+    // Uncheck the "ready-toggle" checkbox
+    readyToggle.checked = false;
+
+    // Send an "unready" message through the WebSocket
+    ws.send(JSON.stringify({
+        type: "unready",
+        userName: userName
+    }));
+    resetBoard();  // Reset the game
+    break;
 
         default:
-            console.error("Unknown message type:", message);
-    }
+    console.error("Unknown message type:", message);
+}
 
-    // Auto-scroll chat
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+// Auto-scroll chat
+messagesDiv.scrollTop = messagesDiv.scrollHeight;
 };
 
 // Sends message to server when submit button is clicked
@@ -198,21 +234,78 @@ createTicTacToeBoard();  // Call this during page load
 function resetBoard() {
     Array.from(gameBoard.children).forEach((cell) => {
         cell.textContent = "";
+        cell.style.pointerEvents = "auto"; // Reset pointer-events style
         cell.style.backgroundColor = "";  // Reset cell background
     });
 }
 
-function appendChatMessages(messages) {
-    console.log("append chat messages", messages)
-    messages.forEach(chatMsg => {
-        // Check if the message has already been added
-        if (!messagesDiv.innerHTML.includes(chatMsg.text)) {
+// function appendChatMessages(messages) {
+//     if (messages) {
+//         // Check if 'messages' is an array or a single object
+//         const isArray = Array.isArray(messages);
+
+//         // Create an array to handle both single object and array cases
+//         const messagesArray = isArray ? messages : [messages];
+
+//         messagesArray.forEach(chatMsg => {
+//             // Check if the message has already been added 
+//             // (You might want to refine this logic based on your needs)
+
+//             // Check if sender is "GAMEMASTER" and add the "system-msg" class
+//             const timestamp = new Date(chatMsg.timestamp).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
+//             if (chatMsg.sender === "GAMEMASTER") {
+//                 messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
+//             } else {
+//                 messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
+//             }
+
+//         });
+//     }
+// }
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+}
+
+// Function to update chat messages
+function updateChatMessages(serverMessages) {
+    const localLength = chatMessages.length;
+    const serverLength = serverMessages.length;
+
+    if (serverLength > localLength) {
+        // Add only the new messages
+        const newMessages = serverMessages.slice(localLength);
+        chatMessages = [...chatMessages, ...newMessages];
+
+        // Render the new messages on the UI
+        renderMessages(newMessages);
+    }
+}
+
+// Function to render messages on the UI
+function renderMessages(messages) {
+    if (messages) {
+        // Check if 'messages' is an array or a single object
+        const isArray = Array.isArray(messages);
+
+        // Create an array to handle both single object and array cases
+        const messagesArray = isArray ? messages : [messages];
+
+        messagesArray.forEach(chatMsg => {
+            // Check if the message has already been added 
+            // (You might want to refine this logic based on your needs)
+
             // Check if sender is "GAMEMASTER" and add the "system-msg" class
+            const timestamp = new Date(chatMsg.timestamp).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
             if (chatMsg.sender === "GAMEMASTER") {
-                messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text}</p>`;
+                messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
             } else {
-                messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text}</p>`;
+                messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
             }
-        }
-    });
+
+        });
+    }
 }
