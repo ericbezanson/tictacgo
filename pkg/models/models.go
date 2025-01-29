@@ -19,22 +19,27 @@ type Player struct {
 }
 
 type Lobby struct {
-	ID         string
-	Name       string
-	MaxPlayers int
-	Players    []*Player
-	Conns      []*websocket.Conn // Add this field to track active WebSocket connections
-	Game       *game.Game
-	State      *LobbyState
+	ID           string
+	Name         string
+	MaxPlayers   int
+	Players      []*Player
+	Conns        []*websocket.Conn // Track active WebSocket connections
+	Game         *game.Game
+	GameBoard    [9]string       `json:"gameBoard"`
+	CurrentTurn  string          `json:"currentTurn"`
+	GameStarted  bool            `json:"gameStarted"`
+	ChatMessages []Message       `json:"chatMessages"`
+	ReadyPlayers map[string]bool `json:"readyPlayers"`
 }
 
 type Message struct {
-	Type     string `json:"type"`
-	Text     string `json:"text"`
-	Sender   string `json:"sender,omitempty"`
-	UserName string `json:"userName,omitempty"`
-	Symbol   string `json:"symbol,omitempty"`
-	Position int    `json:"position"`
+	Type      string `json:"type"`
+	Text      string `json:"text"`
+	Sender    string `json:"sender,omitempty"`
+	UserName  string `json:"userName,omitempty"`
+	Symbol    string `json:"symbol,omitempty"`
+	Position  int    `json:"position"`
+	Timestamp string `json:"timestamp"`
 }
 
 type Game struct {
@@ -44,14 +49,4 @@ type Game struct {
 	UserCount      int
 	SpectatorCount int
 	Players        []string // track player names/symbols
-}
-
-type LobbyState struct {
-	GameBoard    [9]string       `json:"gameBoard"`   // current state of the game board
-	CurrentTurn  string          `json:"currentTurn"` // current players turn
-	GameStarted  bool            `json:"gameStarted"`
-	ChatMessages []Message       `json:"chatMessages"` // chat logs
-	Players      []string        `json:"players"`      // current connected players
-	ReadyPlayers map[string]bool `json:"readyPlayers"` // map to track players' readiness
-
 }

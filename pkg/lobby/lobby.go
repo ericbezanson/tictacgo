@@ -12,6 +12,28 @@ import (
 )
 
 func CreateLobby(w http.ResponseWriter, r *http.Request) {
+
+	username := r.URL.Query().Get("username")
+	if username == "" {
+		// Handle the case where no username is passed (optional)
+		http.Error(w, "Username is required", http.StatusBadRequest)
+		return
+	}
+
+	// Now you can use the username in your logic, for example:
+	fmt.Println("Username from URL:", username)
+
+	// Read the username from the cookie
+	cookie, err := r.Cookie("username")
+	if err != nil {
+		http.Error(w, "Username cookie not found", http.StatusBadRequest)
+		return
+	}
+	username = cookie.Value
+
+	// Now you can use the username in your logic
+	fmt.Println("Username from cookie:", username)
+
 	// creates a new instance of a game using a function defined in the game package.
 	newGame := game.NewGame()
 
@@ -22,7 +44,7 @@ func CreateLobby(w http.ResponseWriter, r *http.Request) {
 	// & goes in front of a variable when you want to get that variable's memory address
 	newLobby := &models.Lobby{
 		ID:         lobbyID,
-		Name:       fmt.Sprintf("Lobby %s", lobbyID),
+		Name:       fmt.Sprintf("%s's Lobby", username),
 		MaxPlayers: 2,
 		Game:       newGame, // Initialize the Game here
 	}

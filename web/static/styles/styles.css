@@ -58,6 +58,14 @@ body {
     text-transform: uppercase;
 }
 
+.system-msg > .timestamp {
+  color: slategray;
+  font-weight: lighter;
+  font-size: 0.8em; 
+  margin-left: 5px; 
+}
+
+
 #player-info {
     margin-top: 15px;
     font-size: 16px;

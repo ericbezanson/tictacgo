@@ -4,17 +4,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="../static/assets/favicon.ico">
     <title>Tic-Tac-Toe Lobby</title>
 </head>
 
 <body>
     <h1>Welcome to Tic-Tac-Toe</h1>
-    <button id="createLobbyBtn">Create Lobby</button>
+
+    <div>
+        <input type="text" id="username" placeholder="Enter username" maxlength="15">
+        <button id="submitUsernameBtn">Submit Username</button>
+    </div>
+
+    <button id="createLobbyBtn" disabled>Create Lobby</button>
 
     <h2>Open Lobbies</h2>
     <ul id="lobby-list"></ul>
 
-    <script src="/static/js/app.js"></script>
+    <script src="../static/js/home.js"></script>
 </body>
 
 </html>
