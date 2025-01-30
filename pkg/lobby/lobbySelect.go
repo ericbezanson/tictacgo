@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"html/template" // Provides functions for parsing and executing HTML templates, allowing the rendering of HTML content with dynamic data.
 	"net/http"      // handles http requests
+	"tictacgo/models"
 	"tictacgo/pkg/game"
-	"tictacgo/pkg/models"
 
 	"github.com/google/uuid" // generate uuids
 )

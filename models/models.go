@@ -1,7 +1,9 @@
 package models
 
 import (
+	"encoding/json"
 	"tictacgo/pkg/game"
+	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -28,8 +30,29 @@ type Lobby struct {
 	GameBoard    [9]string       `json:"gameBoard"`
 	CurrentTurn  string          `json:"currentTurn"`
 	GameStarted  bool            `json:"gameStarted"`
-	ChatMessages []Message       `json:"chatMessages"`
+	ChatMessages []ChatMessage   `json:"chatMessages"`
 	ReadyPlayers map[string]bool `json:"readyPlayers"`
+}
+
+func (l *Lobby) BroadcastChatMessages() error {
+	// Create a message to send to clients
+	msg := struct {
+		Type         string        `json:"type"`
+		ChatMessages []ChatMessage `json:"chatMessages"`
+	}{
+		Type:         "chatMessage",
+		ChatMessages: l.ChatMessages,
+	}
+
+	// Send the message to all connected clients
+	for _, conn := range l.Conns {
+		err := json.NewEncoder(conn).Encode(msg)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type Message struct {
@@ -49,4 +72,10 @@ type Game struct {
 	UserCount      int
 	SpectatorCount int
 	Players        []string // track player names/symbols
+}
+
+type ChatMessage struct {
+	Text      string
+	Sender    string
+	Timestamp time.Time
 }

@@ -65,6 +65,12 @@ body {
   margin-left: 5px; 
 }
 
+.timestamp {
+  color: slategray;
+  font-weight: lighter;
+  font-size: 0.8em; 
+  margin-left: 5px; 
+}
 
 #player-info {
     margin-top: 15px;

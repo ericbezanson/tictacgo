@@ -287,6 +287,7 @@ function updateChatMessages(serverMessages) {
 
 // Function to render messages on the UI
 function renderMessages(messages) {
+    console.log("renderMessage", messages)
     if (messages) {
         // Check if 'messages' is an array or a single object
         const isArray = Array.isArray(messages);
@@ -295,15 +296,16 @@ function renderMessages(messages) {
         const messagesArray = isArray ? messages : [messages];
 
         messagesArray.forEach(chatMsg => {
+            console.log("chatMsg", chatMsg)
             // Check if the message has already been added 
             // (You might want to refine this logic based on your needs)
 
             // Check if sender is "GAMEMASTER" and add the "system-msg" class
-            const timestamp = new Date(chatMsg.timestamp).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
-            if (chatMsg.sender === "GAMEMASTER") {
-                messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
+            const timestamp = new Date(chatMsg.Timestamp).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
+            if (chatMsg.Sender === "GAMEMASTER") {
+                messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.Sender}: ${chatMsg.Text} <span class="timestamp">(${timestamp})</span></p>`;
             } else {
-                messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
+                messagesDiv.innerHTML += `<p>${chatMsg.Sender}: ${chatMsg.Text} <span class="timestamp">(${timestamp})</span></p>`;
             }
 
         });

@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"tictacgo/pkg/models"
+	"tictacgo/models"
+	"tictacgo/pkg/chat"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,7 +42,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 		lobby.GameBoard = [9]string{}
 		// Check if ChatMessages is already initialized, otherwise initialize as empty array
 		if lobby.ChatMessages == nil {
-			lobby.ChatMessages = []models.Message{}
+			lobby.ChatMessages = []models.ChatMessage{}
 		}
 		// Check if ReadyPlayers is already initialized, otherwise initialize as empty map
 		if lobby.ReadyPlayers == nil {
@@ -97,6 +98,10 @@ func HandleWebSocket(ws *websocket.Conn) {
 			}
 		case "chat":
 			BroadcastChatMessage(lobby, msg)
+			err = handleClientMessage(ws, lobby, player, msg)
+			if err != nil {
+				log.Println("Error handling text message:", err)
+			}
 		case "move":
 			BroadcastGameMove(lobby, ws, msg)
 		case "ready":
@@ -141,17 +146,30 @@ func HandleWebSocket(ws *websocket.Conn) {
 	}
 }
 
+func handleClientMessage(conn *websocket.Conn, l *models.Lobby, player *models.Player, msg interface{}) error {
+	switch msg := msg.(type) {
+	case chat.Message:
+		return chat.HandleChatMessage(conn, l, player, msg)
+	// case game.Move:
+	// 		return game.HandleGameMove(conn, l, player, msg)
+	// case lobby.Ready:
+	// 		return lobby.HandleReady(conn, l, player, msg)
+	default:
+		return fmt.Errorf("unknown message type: %T", msg)
+	}
+}
+
 ////// ------------------------------------------------------------------------------------------------------------- Helpers
 
 // broadcast state to a newly connected user when they first connect to the lobby
 func HandleInitialConnection(ws *websocket.Conn, lobby *models.Lobby) {
 	initialState := struct {
-		Type         string           `json:"type"`
-		GameBoard    [9]string        `json:"gameBoard"`
-		CurrentTurn  string           `json:"currentTurn"`
-		GameStarted  bool             `json:"gameStarted"`
-		ChatMessages []models.Message `json:"chatMessages"`
-		ReadyPlayers map[string]bool  `json:"readyPlayers"`
+		Type         string               `json:"type"`
+		GameBoard    [9]string            `json:"gameBoard"`
+		CurrentTurn  string               `json:"currentTurn"`
+		GameStarted  bool                 `json:"gameStarted"`
+		ChatMessages []models.ChatMessage `json:"chatMessages"`
+		ReadyPlayers map[string]bool      `json:"readyPlayers"`
 	}{
 		Type:         "initialState",
 		GameBoard:    lobby.GameBoard,
@@ -181,12 +199,12 @@ func sendJSON(ws *websocket.Conn, msg map[string]interface{}) {
 // updates all connected clients with the current lobby state
 func BroadcastLobbyState(lobby *models.Lobby) {
 	state := struct {
-		Type         string           `json:"type"`
-		GameBoard    [9]string        `json:"gameBoard"`
-		CurrentTurn  string           `json:"currentTurn"`
-		GameStarted  bool             `json:"gameStarted"`
-		ChatMessages []models.Message `json:"chatMessages"`
-		ReadyPlayers map[string]bool  `json:"readyPlayers"`
+		Type         string               `json:"type"`
+		GameBoard    [9]string            `json:"gameBoard"`
+		CurrentTurn  string               `json:"currentTurn"`
+		GameStarted  bool                 `json:"gameStarted"`
+		ChatMessages []models.ChatMessage `json:"chatMessages"`
+		ReadyPlayers map[string]bool      `json:"readyPlayers"`
 	}{
 		Type:         "updatePlayers",
 		GameBoard:    lobby.GameBoard,
@@ -208,15 +226,11 @@ func BroadcastLobbyState(lobby *models.Lobby) {
 func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
 	fmt.Printf("Broadcasting chat message: %+v\n", msg)
 
-	// Get current timestamp
-	now := time.Now().Format(time.RFC3339Nano)
-
 	// Create a chat message
-	chatMessage := models.Message{
-		Type:      "chat",
+	chatMessage := models.ChatMessage{
 		Text:      msg["text"].(string),
 		Sender:    msg["sender"].(string),
-		Timestamp: now,
+		Timestamp: time.Now(),
 	}
 
 	// Add the message to the lobby's chat messages array

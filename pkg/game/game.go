@@ -1,5 +1,6 @@
 package game
 
+// / -------------------------------------------------------------------------------- GAME LOGIC
 // game struct
 type Game struct {
 	Board          [9]string
@@ -77,3 +78,5 @@ func (g *Game) Reset() {
 	g.CurrentTurn = "X"
 	g.GameStarted = false
 }
+
+// --------------------------------------------------------------------------------- GAME / SERVER COMMUNICATION
