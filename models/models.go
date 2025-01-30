@@ -25,13 +25,12 @@ type Lobby struct {
 	Name         string
 	MaxPlayers   int
 	Players      []*Player
-	Conns        []*websocket.Conn // Track active WebSocket connections
-	Game         *game.Game
-	GameBoard    [9]string       `json:"gameBoard"`
-	CurrentTurn  string          `json:"currentTurn"`
-	GameStarted  bool            `json:"gameStarted"`
-	ChatMessages []ChatMessage   `json:"chatMessages"`
-	ReadyPlayers map[string]bool `json:"readyPlayers"`
+	Conns        []*websocket.Conn
+	Game         *game.Game // ✅ Reference Game directly
+	ReadyPlayers map[string]bool
+	GameStarted  bool          `json:"gameStarted"`
+	ChatMessages []ChatMessage `json:"chatMessages"`
+	CurrentTurn  string        `json:"currentTurn"`
 }
 
 func (l *Lobby) BroadcastChatMessages() error {
@@ -65,14 +64,14 @@ type Message struct {
 	Timestamp string `json:"timestamp"`
 }
 
-type Game struct {
-	Board          [9]string
-	CurrentTurn    string
-	GameStarted    bool
-	UserCount      int
-	SpectatorCount int
-	Players        []string // track player names/symbols
-}
+// type Game struct {
+// 	Board          [9]string
+// 	CurrentTurn    string
+// 	GameStarted    bool
+// 	UserCount      int
+// 	SpectatorCount int
+// 	Players        []string // track player names/symbols
+// }
 
 type ChatMessage struct {
 	Text      string
