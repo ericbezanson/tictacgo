@@ -13,11 +13,11 @@ type Message struct {
 	Sender string
 }
 
-func HandleChatMessage(conn *websocket.Conn, l *models.Lobby, player *models.Player, msg Message) error {
+func HandleChatMessage(conn *websocket.Conn, l *models.Lobby, player *models.Player, msg map[string]interface{}) error {
 	// Convert msg to chat.Message struct
 	chatMsg := Message{
-		Text:   msg.Text,
-		Sender: player.Name, // Assuming sender name is available from the player object
+		Text:   msg["text"].(string),
+		Sender: msg["sender"].(string),
 	}
 
 	// Add message to lobby's chat history

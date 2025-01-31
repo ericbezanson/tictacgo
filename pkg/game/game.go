@@ -13,12 +13,6 @@ type Game struct {
 	Players        []string // track player names/symbols
 }
 
-type GameMessage struct {
-	position float64
-	symbol   string
-	username string
-}
-
 // --------------------------------------------------------------------------------- GAME / SERVER COMMUNICATION
 
 // HandleGameMove processes the move and returns the outcome (win, draw, error, etc.)
@@ -35,21 +29,30 @@ func (g *Game) HandleGameMove(position int, symbol string, username string) map[
 	if winPatterns := g.CheckWin(symbol); len(winPatterns) > 0 {
 		g.Reset()
 		return map[string]interface{}{
-			"type":   "win",
-			"text":   fmt.Sprintf("%s wins!", username),
-			"winner": symbol,
+			"type":     "move",
+			"text":     fmt.Sprintf("%s wins!", username),
+			"winner":   symbol,
+			"next":     "win",
+			"position": position,
+			"symbol":   symbol,
 		}
 	} else if g.CheckStalemate() {
 		g.Reset()
 		return map[string]interface{}{
-			"type": "draw",
-			"text": "It's a draw!",
+			"type":     "move",
+			"text":     "It's a draw!",
+			"next":     "draw",
+			"position": position,
+			"symbol":   symbol,
 		}
 	} else {
 		g.SwitchTurn()
 		return map[string]interface{}{
-			"type": "updateTurn",
-			"text": g.CurrentTurn,
+			"type":     "move",
+			"text":     g.CurrentTurn,
+			"next":     "updateTurn",
+			"position": position,
+			"symbol":   symbol,
 		}
 	}
 }

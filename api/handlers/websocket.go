@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"tictacgo/models"
+	"tictacgo/pkg/chat"
 	"time"
 
 	"github.com/google/uuid"
@@ -96,7 +97,7 @@ func HandleWebSocket(ws *websocket.Conn) {
 				fmt.Println("Username is missing or not a string in the received message.")
 			}
 		case "chat":
-			// chat.HandleChatMessage(ws, lobby, player, msg)
+			chat.HandleChatMessage(ws, lobby, player, msg)
 		case "move":
 			// Extract the move details
 			rawPosition := msg["position"].(float64)
@@ -109,7 +110,13 @@ func HandleWebSocket(ws *websocket.Conn) {
 			// BroadcastGameMove(lobby, ws, msg)
 			response := lobby.Game.HandleGameMove(position, symbol, username)
 			fmt.Println("resp", response)
-			sendJSON(ws, response) // Send result back to client
+			// sendJSON(ws, response) // Send result back to client
+			for _, conn := range lobby.Conns {
+				if err := websocket.JSON.Send(conn, response); err != nil {
+					log.Printf("Error sending move message: %v", err)
+					continue
+				}
+			}
 		case "ready":
 			// Mark the player as ready
 			// add player to ReadyPlayers map
@@ -151,19 +158,6 @@ func HandleWebSocket(ws *websocket.Conn) {
 
 	}
 }
-
-// func handleClientMessage(conn *websocket.Conn, l *models.Lobby, player *models.Player, msg interface{}) error {
-// 	switch msg := msg.(type) {
-// 	case chat.Message:
-// 		return chat.HandleChatMessage(conn, l, player, msg)
-// 	// case game.Move:
-// 	// 	return game.HandleGameMove(conn, l, player, msg)
-// 	// case lobby.Ready:
-// 	// 		return lobby.HandleReady(conn, l, player, msg)
-// 	default:
-// 		return fmt.Errorf("unknown message type: %T", msg)
-// 	}
-// }
 
 ////// ------------------------------------------------------------------------------------------------------------- Helpers
 
@@ -252,102 +246,6 @@ func BroadcastChatMessage(lobby *models.Lobby, msg map[string]interface{}) {
 }
 
 ////// ------------------------------------------------------------------------------------------------------------- Game Helpers
-
-// func BroadcastGameMove(lobby *models.Lobby, ws *websocket.Conn, msg map[string]interface{}) {
-// 	// Log the incoming move message
-// 	log.Printf("Received move: %+v", msg)
-
-// 	// Get the game associated with the lobby
-// 	game := lobby.Game
-
-// 	// Extract the move details
-// 	rawPosition := msg["position"].(float64)
-// 	username := msg["userName"].(string)
-// 	// convert based on format game needs
-// 	// TODO! - update so that game and data coming from server have matching types
-// 	positionAsInt := int(rawPosition)
-// 	symbol := msg["symbol"].(string)
-
-// 	// check if game accepts incoming move as a valid one, then execute logic
-// 	if game.MakeMove(positionAsInt, symbol) {
-
-// 		// !NOTE - proper sequence of events:
-// 		// Player makes a move (server processes the move).
-// 		// UI is updated (via WebSocket message).
-// 		// Win or draw condition is checked (server sends an alert and chat message).
-// 		// If no win or draw, call SwitchTurn() (server updates the turn and notifies).
-
-// 		// Log successful move
-// 		log.Printf("Move made at position %d by symbol %s", positionAsInt, symbol)
-
-// 		// update gameboard in LobbyState
-// 		lobby.Game.Board[positionAsInt] = symbol
-
-// 		// Broadcast the move to all players (UI update)
-// 		for _, conn := range lobby.Conns {
-// 			if err := websocket.JSON.Send(conn, msg); err != nil {
-// 				log.Printf("Error sending move message: %v", err)
-// 				continue
-// 			}
-// 		}
-
-// 		// handle outcome of move (win, stalemate or standard move)
-// 		winPatterns := game.CheckWin(symbol)
-// 		if len(winPatterns) > 0 { // Check for a win
-// 			winMsg := map[string]interface{}{
-// 				"type":   "win",
-// 				"text":   fmt.Sprintf("%s wins!", username),
-// 				"sender": "GAMEMASTER",
-// 				"winner": symbol,
-// 			}
-// 			// Send win message separately
-// 			for _, conn := range lobby.Conns {
-// 				sendJSON(conn, winMsg)
-// 			}
-
-// 			BroadcastChatMessage(lobby, winMsg)
-// 			game.Reset()
-
-// 		} else if len(winPatterns) == 0 && game.CheckStalemate() { // Check for a Stalemate
-// 			drawMsg := map[string]interface{}{
-// 				"type":   "draw",
-// 				"text":   "It's a draw!",
-// 				"sender": "GAMEMASTER",
-// 			}
-
-// 			// Send draw message separately
-// 			for _, conn := range lobby.Conns {
-// 				sendJSON(conn, drawMsg)
-// 			}
-
-// 			BroadcastChatMessage(lobby, drawMsg)
-// 			game.Reset()
-// 		} else if len(winPatterns) == 0 && !game.CheckStalemate() { // Standard move
-// 			game.SwitchTurn()
-// 			// Broadcast startGame message to all connected clients
-// 			start := map[string]interface{}{
-// 				"type": "updateTurn",
-// 				"text": game.CurrentTurn,
-// 			}
-
-// 			// send statGame message to all Conns in the lobby
-// 			for _, conn := range lobby.Conns {
-// 				sendJSON(conn, start)
-// 			}
-// 		}
-
-// 	} else {
-// 		// Send an error message back to the player
-// 		errorMsg := map[string]interface{}{
-// 			"type":     "invalidMove",
-// 			"text":     "Invalid move: Position already filled or out of bounds",
-// 			"position": positionAsInt,
-// 		}
-// 		if err := websocket.JSON.Send(ws, errorMsg); err != nil {
-// 			log.Printf("Error sending invalid move message: %v", err)
-// 		}
-// 	}
-// }
 
 func assignAndNotifyPlayer(lobby *models.Lobby, ws *websocket.Conn, player *models.Player) {
 

@@ -39,7 +39,7 @@ func (l *Lobby) BroadcastChatMessages() error {
 		Type         string        `json:"type"`
 		ChatMessages []ChatMessage `json:"chatMessages"`
 	}{
-		Type:         "chatMessage",
+		Type:         "updatePlayers",
 		ChatMessages: l.ChatMessages,
 	}
 
