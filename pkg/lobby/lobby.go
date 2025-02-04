@@ -4,11 +4,14 @@ import (
 	"encoding/json" // Used to encode Go data structures into JSON format.
 	"fmt"
 	"html/template" // Provides functions for parsing and executing HTML templates, allowing the rendering of HTML content with dynamic data.
-	"net/http"      // handles http requests
+	"log"
+	"net/http" // handles http requests
 	"tictacgo/models"
+	"tictacgo/pkg/chat"
 	"tictacgo/pkg/game"
 
 	"github.com/google/uuid" // generate uuids
+	"golang.org/x/net/websocket"
 )
 
 func CreateLobby(w http.ResponseWriter, r *http.Request) {
@@ -95,4 +98,70 @@ func ServeLobby(w http.ResponseWriter, r *http.Request) {
 	tmpl, _ := template.ParseFiles("./web/templates/lobby.html")
 	// renders the lobby.html template and passes the lobby object to it
 	tmpl.Execute(w, lobby)
+}
+
+// AssignAndNotifyPlayer assigns a symbol to a player and notifies the lobby
+func AssignAndNotifyPlayer(lobby *models.Lobby, ws *websocket.Conn, player *models.Player) {
+
+	// Check the number of players in the lobby to assign roles
+	if len(lobby.Players) < 2 {
+		// Assign the first two players as "X" and "O"
+		symbol := "X"
+		if len(lobby.Players) == 1 {
+			symbol = "O"
+		}
+		player.Symbol = symbol
+		lobby.Players = append(lobby.Players, player)
+
+		// Prepare and send the message to individual player
+		messageToUser := map[string]interface{}{
+			"type":     "assignPlayer",
+			"userName": player.Name,
+			"symbol":   player.Symbol,
+		}
+		sendJSON(ws, messageToUser)
+
+		// Notify both players
+		gameMasterMessage := map[string]interface{}{
+			"type":   "chat",
+			"sender": "GAMEMASTER",
+			"text":   fmt.Sprintf("%v has joined the game!", player.Name),
+		}
+		chat.HandleChatMessage(lobby, gameMasterMessage)
+
+	} else {
+		// Assign additional connections as spectators
+		player.Symbol = "S"
+		lobby.Players = append(lobby.Players, player)
+
+		// Send spectator notification
+		messageToUser := map[string]interface{}{
+			"type":     "lobbyFull",
+			"userName": player.Name,
+			"text":     "The lobby is full, you are now spectating.",
+		}
+		sendJSON(ws, messageToUser)
+
+		gameMasterMessage := map[string]interface{}{
+			"type":   "chat",
+			"sender": "GAMEMASTER",
+			"text":   fmt.Sprintf("%v is now spectating!", player.Name),
+		}
+		chat.HandleChatMessage(lobby, gameMasterMessage)
+
+	}
+}
+
+// Helper function to send a JSON message over the WebSocket
+// used for sending to individial client instead of all clients
+func sendJSON(ws *websocket.Conn, msg map[string]interface{}) {
+	// convert go map data structure into a json-formatted string
+	jsonData, err := json.Marshal(msg)
+	if err != nil {
+		log.Println("Error marshalling JSON:", err)
+		return
+	}
+	if _, err := ws.Write(jsonData); err != nil {
+		log.Println("Error sending JSON:", err)
+	}
 }

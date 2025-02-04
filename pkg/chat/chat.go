@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"tictacgo/models"
-
-	"golang.org/x/net/websocket"
 )
 
 type Message struct {
@@ -13,7 +11,7 @@ type Message struct {
 	Sender string
 }
 
-func HandleChatMessage(conn *websocket.Conn, l *models.Lobby, player *models.Player, msg map[string]interface{}) error {
+func HandleChatMessage(l *models.Lobby, msg map[string]interface{}) error {
 	// Convert msg to chat.Message struct
 	chatMsg := Message{
 		Text:   msg["text"].(string),

@@ -13,14 +13,23 @@ type Game struct {
 	Players        []string // track player names/symbols
 }
 
+type GameMessage struct {
+	Type     string `json:"type"`
+	Text     string `json:"text"`
+	Next     string `json:"next"`
+	Winner   string `json:"winner"`
+	Position int    `json:"position"`
+	Symbol   string `json:"symbol"`
+}
+
 // --------------------------------------------------------------------------------- GAME / SERVER COMMUNICATION
 
-// HandleGameMove processes the move and returns the outcome (win, draw, error, etc.)
-func (g *Game) HandleGameMove(position int, symbol string, username string) map[string]interface{} {
+// HandleGameMove processes the move and returns a GameMessage
+func (g *Game) HandleGameMove(position int, symbol string, username string) GameMessage {
 	if position < 0 || position > 8 || g.Board[position] != "" {
-		return map[string]interface{}{
-			"type": "invalidMove",
-			"text": "Invalid move: Position already filled or out of bounds",
+		return GameMessage{
+			Type: "invalidMove",
+			Text: "Invalid move: Position already filled or out of bounds",
 		}
 	}
 
@@ -28,31 +37,33 @@ func (g *Game) HandleGameMove(position int, symbol string, username string) map[
 
 	if winPatterns := g.CheckWin(symbol); len(winPatterns) > 0 {
 		g.Reset()
-		return map[string]interface{}{
-			"type":     "move",
-			"text":     fmt.Sprintf("%s wins!", username),
-			"winner":   symbol,
-			"next":     "win",
-			"position": position,
-			"symbol":   symbol,
+		return GameMessage{
+			Type:     "move",
+			Text:     fmt.Sprintf("%s wins!", username),
+			Next:     "win",
+			Winner:   symbol,
+			Position: position,
+			Symbol:   symbol,
 		}
 	} else if g.CheckStalemate() {
 		g.Reset()
-		return map[string]interface{}{
-			"type":     "move",
-			"text":     "It's a draw!",
-			"next":     "draw",
-			"position": position,
-			"symbol":   symbol,
+		return GameMessage{
+			Type:     "move",
+			Text:     "It's a draw!",
+			Next:     "draw",
+			Winner:   "none",
+			Position: position,
+			Symbol:   symbol,
 		}
 	} else {
 		g.SwitchTurn()
-		return map[string]interface{}{
-			"type":     "move",
-			"text":     g.CurrentTurn,
-			"next":     "updateTurn",
-			"position": position,
-			"symbol":   symbol,
+		return GameMessage{
+			Type:     "move",
+			Text:     g.CurrentTurn,
+			Next:     "updateTurn",
+			Winner:   "none",
+			Position: position,
+			Symbol:   symbol,
 		}
 	}
 }

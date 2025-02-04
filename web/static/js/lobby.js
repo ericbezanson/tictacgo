@@ -203,30 +203,6 @@ function resetBoard() {
     });
 }
 
-// function appendChatMessages(messages) {
-//     if (messages) {
-//         // Check if 'messages' is an array or a single object
-//         const isArray = Array.isArray(messages);
-
-//         // Create an array to handle both single object and array cases
-//         const messagesArray = isArray ? messages : [messages];
-
-//         messagesArray.forEach(chatMsg => {
-//             // Check if the message has already been added 
-//             // (You might want to refine this logic based on your needs)
-
-//             // Check if sender is "GAMEMASTER" and add the "system-msg" class
-//             const timestamp = new Date(chatMsg.timestamp).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
-//             if (chatMsg.sender === "GAMEMASTER") {
-//                 messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
-//             } else {
-//                 messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
-//             }
-
-//         });
-//     }
-// }
-
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
