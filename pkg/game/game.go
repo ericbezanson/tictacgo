@@ -1,6 +1,9 @@
 package game
 
-// game struct
+import (
+	"fmt"
+)
+
 type Game struct {
 	Board          [9]string
 	CurrentTurn    string
@@ -9,6 +12,63 @@ type Game struct {
 	SpectatorCount int
 	Players        []string // track player names/symbols
 }
+
+type GameMessage struct {
+	Type     string `json:"type"`
+	Text     string `json:"text"`
+	Next     string `json:"next"`
+	Winner   string `json:"winner"`
+	Position int    `json:"position"`
+	Symbol   string `json:"symbol"`
+}
+
+// --------------------------------------------------------------------------------- GAME / SERVER COMMUNICATION
+
+// HandleGameMove processes the move and returns a GameMessage
+func (g *Game) HandleGameMove(position int, symbol string, username string) GameMessage {
+	if position < 0 || position > 8 || g.Board[position] != "" {
+		return GameMessage{
+			Type: "invalidMove",
+			Text: "Invalid move: Position already filled or out of bounds",
+		}
+	}
+
+	g.Board[position] = symbol
+
+	if winPatterns := g.CheckWin(symbol); len(winPatterns) > 0 {
+		g.Reset()
+		return GameMessage{
+			Type:     "move",
+			Text:     fmt.Sprintf("%s wins!", username),
+			Next:     "win",
+			Winner:   symbol,
+			Position: position,
+			Symbol:   symbol,
+		}
+	} else if g.CheckStalemate() {
+		g.Reset()
+		return GameMessage{
+			Type:     "move",
+			Text:     "It's a draw!",
+			Next:     "draw",
+			Winner:   "none",
+			Position: position,
+			Symbol:   symbol,
+		}
+	} else {
+		g.SwitchTurn()
+		return GameMessage{
+			Type:     "move",
+			Text:     g.CurrentTurn,
+			Next:     "updateTurn",
+			Winner:   "none",
+			Position: position,
+			Symbol:   symbol,
+		}
+	}
+}
+
+// / -------------------------------------------------------------------------------- GAME LOGIC
 
 // inits new instance of Game, with default values
 func NewGame() *Game {

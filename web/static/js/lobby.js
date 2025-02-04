@@ -82,86 +82,49 @@ ws.onmessage = (event) => {
 
 
         case "lobbyFull":
-    userName = message.userName;
-    user.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
-    alert(message.text);
-    break;
+            userName = message.userName;
+            user.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
+            alert(message.text);
+            break;
 
         case "assignPlayer":
-    userName = message.userName;
-    playerSymbol = message.symbol;
-    user.innerHTML = `YOU ARE PLAYING AS <b>${userName}</b>`;
-    break;
+            userName = message.userName;
+            playerSymbol = message.symbol;
+            user.innerHTML = `YOU ARE PLAYING AS <b>${userName}</b>`;
+            break;
 
         case "startGame":
-    console.log("start game", message)
-    gameStarted = true
+            console.log("start game", message)
+            gameStarted = true
 
         // Handler for player moves
         case "move":
-    // NOTE - proper sequence of events
-    // 1. Listen for the "move" message and update the UI.
-    // 2. Show an alert if the game is won or drawn and reset the board.
-    // 3. Update the turn information after the turn switches.
-    if (typeof message.position === "number" && message.position >= 0) {
-        const cell = gameBoard.children[message.position];
-        if (!cell) {
-            console.error("Invalid tile position", message.position);
-            return;
-        }
-        cell.textContent = message.symbol;
-        cell.style.pointerEvents = "none"; // Disable interaction on filled cell
-    } else {
-        console.error("Unexpected message format", message);
-    }
-    break;
-
-        case "updateTurn":
-    activePlayer = message.text;
-    break;
+            if (typeof message.position === "number" && message.position >= 0) {
+                const cell = gameBoard.children[message.position];
+                if (!cell) {
+                    console.error("Invalid tile position", message.position);
+                    return;
+                }
+                cell.textContent = message.symbol;
+                cell.style.pointerEvents = "none";
+                console.log("About to call handleNext with:", message); // Debug log
+                handleNext(message); // Call handleNext *here*
+            } else {
+                console.error("Unexpected message format", message);
+            }
+            break; // Break is essential here
 
         case "chat":
-    appendChatMessages(message)
-    break;
+            appendChatMessages(message)
 
-        case "win":
-    gameStarted = false
-    isReady = false
-    alert(message.text);  // Show the winner
-
-    // Uncheck the "ready-toggle" checkbox
-    readyToggle.checked = false;
-
-    // Send an "unready" message through the WebSocket
-    ws.send(JSON.stringify({
-        type: "unready",
-        userName: userName
-    }));
-    resetBoard();  // Reset the game
-    break;
-
-        case "draw":
-    gameStarted = false
-    isReady = false
-    alert(message.text);  // Show the winner
-
-    // Uncheck the "ready-toggle" checkbox
-    readyToggle.checked = false;
-
-    // Send an "unready" message through the WebSocket
-    ws.send(JSON.stringify({
-        type: "unready",
-        userName: userName
-    }));
-    resetBoard();  // Reset the game
-    break;
+            break;
 
         default:
-    console.error("Unknown message type:", message);
-}
+            console.error("Unknown message type:", message);
+    }
 
-// Auto-scroll chat
-messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    // Auto-scroll chat
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 };
 
 // Sends message to server when submit button is clicked
@@ -173,6 +136,7 @@ function sendMessage() {
 
 // Send Tic-Tac-Toe tile position data to server to be processed by server game logic
 function handleCellClick(e) {
+    console.log("ActivePlayer", activePlayer)
     const cell = e.target;
     const cells = Array.from(gameBoard.children);
     const position = cells.indexOf(cell);
@@ -239,30 +203,6 @@ function resetBoard() {
     });
 }
 
-// function appendChatMessages(messages) {
-//     if (messages) {
-//         // Check if 'messages' is an array or a single object
-//         const isArray = Array.isArray(messages);
-
-//         // Create an array to handle both single object and array cases
-//         const messagesArray = isArray ? messages : [messages];
-
-//         messagesArray.forEach(chatMsg => {
-//             // Check if the message has already been added 
-//             // (You might want to refine this logic based on your needs)
-
-//             // Check if sender is "GAMEMASTER" and add the "system-msg" class
-//             const timestamp = new Date(chatMsg.timestamp).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
-//             if (chatMsg.sender === "GAMEMASTER") {
-//                 messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
-//             } else {
-//                 messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
-//             }
-
-//         });
-//     }
-// }
-
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
@@ -287,6 +227,7 @@ function updateChatMessages(serverMessages) {
 
 // Function to render messages on the UI
 function renderMessages(messages) {
+    console.log("renderMessage", messages)
     if (messages) {
         // Check if 'messages' is an array or a single object
         const isArray = Array.isArray(messages);
@@ -295,17 +236,62 @@ function renderMessages(messages) {
         const messagesArray = isArray ? messages : [messages];
 
         messagesArray.forEach(chatMsg => {
+            console.log("chatMsg", chatMsg)
             // Check if the message has already been added 
             // (You might want to refine this logic based on your needs)
 
             // Check if sender is "GAMEMASTER" and add the "system-msg" class
-            const timestamp = new Date(chatMsg.timestamp).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
-            if (chatMsg.sender === "GAMEMASTER") {
-                messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
+            const timestamp = new Date(chatMsg.Timestamp).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
+            if (chatMsg.Sender === "GAMEMASTER") {
+                messagesDiv.innerHTML += `<p class="system-msg">${chatMsg.Sender}: ${chatMsg.Text} <span class="timestamp">(${timestamp})</span></p>`;
             } else {
-                messagesDiv.innerHTML += `<p>${chatMsg.sender}: ${chatMsg.text} <span class="timestamp">(${timestamp})</span></p>`;
+                messagesDiv.innerHTML += `<p>${chatMsg.Sender}: ${chatMsg.Text} <span class="timestamp">(${timestamp})</span></p>`;
             }
 
         });
+    }
+}
+
+function handleNext(message) {
+
+    console.log("handle Next", message)
+    switch (message.next) {
+        case "updateTurn":
+            activePlayer = message.text;
+            break;
+
+            case "win":
+                gameStarted = false
+                isReady = false
+                alert(message.text);  // Show the winner
+    
+                // Uncheck the "ready-toggle" checkbox
+                readyToggle.checked = false;
+    
+                // Send an "unready" message through the WebSocket
+                ws.send(JSON.stringify({
+                    type: "unready",
+                    userName: userName
+                }));
+                resetBoard();  // Reset the game
+                break;
+    
+            case "draw":
+                gameStarted = false
+                isReady = false
+                alert(message.text);  // Show the winner
+    
+                // Uncheck the "ready-toggle" checkbox
+                readyToggle.checked = false;
+    
+                // Send an "unready" message through the WebSocket
+                ws.send(JSON.stringify({
+                    type: "unready",
+                    userName: userName
+                }));
+                resetBoard();  // Reset the game
+                break;
+        default:
+            break;
     }
 }
