@@ -1,9 +1,14 @@
 package chat
 
 import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"tictacgo/models"
+
 	"time"
 
-	"tictacgo/models"
+	"golang.org/x/net/websocket"
 )
 
 type Message struct {
@@ -11,11 +16,28 @@ type Message struct {
 	Sender string
 }
 
-func HandleChatMessage(l *models.Lobby, msg map[string]interface{}) error {
-	// Convert msg to chat.Message struct
+func HandleChatMessage(lobbyID string, msg map[string]interface{}, connections map[string][]*websocket.Conn) error {
+
+	sender, senderOk := msg["sender"].(string)
+	text, textOk := msg["text"].(string)
+
+	println("sender", sender)
+	println("text", text)
+
+	if !senderOk || !textOk {
+		log.Printf("Invalid chat message: %+v", msg)
+		return nil // Prevent the app from crashing
+	}
+
 	chatMsg := Message{
 		Text:   msg["text"].(string),
 		Sender: msg["sender"].(string),
+	}
+
+	// Find the lobby in models
+	l, exists := models.Lobbies[lobbyID]
+	if !exists {
+		return fmt.Errorf("lobby not found")
 	}
 
 	// Add message to lobby's chat history
@@ -26,5 +48,29 @@ func HandleChatMessage(l *models.Lobby, msg map[string]interface{}) error {
 	})
 
 	// Broadcast the updated chat messages
-	return l.BroadcastChatMessages()
+	return BroadcastChatMessages(lobbyID, l.ChatMessages, connections)
+
+}
+
+func BroadcastChatMessages(lobbyID string, messages []models.ChatMessage, connections map[string][]*websocket.Conn) error {
+
+	msg := struct {
+		Type         string               `json:"type"`
+		ChatMessages []models.ChatMessage `json:"chatMessages"`
+	}{
+		Type:         "chat",
+		ChatMessages: messages,
+	}
+
+	// Send message to all clients in the lobby
+	for _, conn := range connections[lobbyID] {
+
+		err := json.NewEncoder(conn).Encode(msg)
+		if err != nil {
+			fmt.Printf("Error sending chat message: %v\n", err)
+			continue
+		}
+	}
+
+	return nil
 }

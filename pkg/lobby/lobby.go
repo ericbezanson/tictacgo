@@ -10,32 +10,70 @@ import (
 	"tictacgo/pkg/chat"
 	"tictacgo/pkg/game"
 
+	"github.com/go-redis/redis"
 	"github.com/google/uuid" // generate uuids
 	"golang.org/x/net/websocket"
 )
 
+var redisClient = redis.NewClient(&redis.Options{
+	Addr: "localhost:6379",
+})
+
+func GetLobbies(w http.ResponseWriter, r *http.Request) {
+	keys, err := redisClient.Keys("lobby:*").Result()
+	if err != nil {
+		log.Println("Redis KEYS error:", err) // Log Redis error
+		http.Error(w, "Failed to fetch lobbies", http.StatusInternalServerError)
+		return
+	}
+
+	if len(keys) == 0 {
+		log.Println("ℹ️ No lobbies found in Redis.")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]")) // Return empty JSON array
+		return
+	}
+
+	var lobbies []models.Lobby
+
+	for _, key := range keys {
+		lobbyData, err := redisClient.Get(key).Result()
+		if err != nil {
+			log.Printf("Error retrieving lobby %s: %v", key, err)
+			continue
+		}
+
+		var lobby models.Lobby
+		if err := json.Unmarshal([]byte(lobbyData), &lobby); err != nil {
+			log.Printf("Error decoding lobby %s: %v", key, err)
+			continue
+		}
+
+		lobbies = append(lobbies, lobby)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(lobbies)
+}
+
 func CreateLobby(w http.ResponseWriter, r *http.Request) {
 
-	username := r.URL.Query().Get("username")
+	username := r.URL.Query().Get("Name")
+	println(username)
+
 	if username == "" {
 		// Handle the case where no username is passed (optional)
 		http.Error(w, "Username is required", http.StatusBadRequest)
 		return
 	}
 
-	// Now you can use the username in your logic, for example:
-	fmt.Println("Username from URL:", username)
+	fmt.Println(username)
 
 	// Read the username from the cookie
-	cookie, err := r.Cookie("username")
-	if err != nil {
-		http.Error(w, "Username cookie not found", http.StatusBadRequest)
-		return
+	cookie, err := r.Cookie("Name")
+	if err == nil { // Only access cookie.Value if there is no error
+		username = cookie.Value
 	}
-	username = cookie.Value
-
-	// Now you can use the username in your logic
-	fmt.Println("Username from cookie:", username)
 
 	// creates a new instance of a game using a function defined in the game package.
 	newGame := game.NewGame()
@@ -50,6 +88,10 @@ func CreateLobby(w http.ResponseWriter, r *http.Request) {
 		Name:       fmt.Sprintf("%s's Lobby", username),
 		MaxPlayers: 2,
 		Game:       newGame, // Initialize the Game here
+		// Conns:        []*websocket.Conn{},
+		Players:      []*models.Player{},
+		ReadyPlayers: make(map[string]bool), // ✅ Initialize the map
+		ChatMessages: []models.ChatMessage{},
 	}
 
 	// stores the newly created lobby in a global
@@ -59,53 +101,68 @@ func CreateLobby(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/lobby/"+lobbyID, http.StatusSeeOther)
 }
 
-func GetLobbies(w http.ResponseWriter, r *http.Request) {
-	var openLobbies []*models.Lobby
-
-	for _, lobby := range models.Lobbies {
-		openLobbies = append(openLobbies, lobby)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	if len(openLobbies) == 0 {
-		// Return an empty array if no lobbies exist
-		w.Write([]byte("[]"))
-		return
-	}
-
-	err := json.NewEncoder(w).Encode(openLobbies)
-	if err != nil {
-		http.Error(w, "Failed to fetch lobbies", http.StatusInternalServerError)
-		return
-	}
-}
-
 func ServeLobby(w http.ResponseWriter, r *http.Request) {
-
-	// extracts the lobby ID from the URL path.
 	lobbyID := r.URL.Path[len("/lobby/"):]
 
-	// The code looks for the lobby in models.Lobbies using lobbyID.
+	// Check if the lobby exists in memory
 	lobby, exists := models.Lobbies[lobbyID]
-
 	if !exists {
-		http.NotFound(w, r)
-		return
+		// Fetch from Redis if not in memory
+		lobbyData, err := redisClient.Get("lobby:" + lobbyID).Result()
+		if err != nil {
+			log.Printf("Lobby %s not found in Redis: %v", lobbyID, err)
+			http.NotFound(w, r)
+			return
+		}
+
+		// Create a new pointer for the lobby
+		lobby = &models.Lobby{}
+		if err := json.Unmarshal([]byte(lobbyData), lobby); err != nil { // <-- FIXED
+			log.Printf("Error decoding lobby %s: %v", lobbyID, err)
+			http.Error(w, "Failed to load lobby", http.StatusInternalServerError)
+			return
+		}
+
+		// Store in models.Lobbies so it persists in memory
+		models.Lobbies[lobbyID] = lobby
 	}
 
-	// If the lobby exists, the code loads the HTML template for the lobby page
+	// Render the lobby page
 	tmpl, _ := template.ParseFiles("./web/templates/lobby.html")
-	// renders the lobby.html template and passes the lobby object to it
 	tmpl.Execute(w, lobby)
 }
 
 // AssignAndNotifyPlayer assigns a symbol to a player and notifies the lobby
-func AssignAndNotifyPlayer(lobby *models.Lobby, ws *websocket.Conn, player *models.Player) {
+func AssignAndNotifyPlayer(lobby *models.Lobby, ws *websocket.Conn, username string, id string, lobbyConnections map[string][]*websocket.Conn) {
 
-	// Check the number of players in the lobby to assign roles
+	var player *models.Player
+
+	// Check if an ID is provided
+	if id != "" {
+		// Search for an existing player with the given ID
+		for _, existingPlayer := range lobby.Players {
+			if existingPlayer.ID == id {
+				// Player found, send assignPlayer message without modifying lobby.Players
+				messageToUser := map[string]interface{}{
+					"type":     "assignPlayer",
+					"username": existingPlayer.Name,
+					"symbol":   existingPlayer.Symbol,
+					"id":       existingPlayer.ID,
+				}
+				sendJSON(ws, messageToUser)
+				return // Exit function, no further processing needed
+			}
+		}
+		// If ID is provided but no match is found, proceed as new player with given ID
+		player = &models.Player{ID: id, Name: username, Ready: false}
+	} else {
+		// No ID provided, generate a new one
+		playerID := uuid.New().String()
+		player = &models.Player{ID: playerID, Name: username, Ready: false}
+	}
+
+	// Assign symbol based on number of players
 	if len(lobby.Players) < 2 {
-		// Assign the first two players as "X" and "O"
 		symbol := "X"
 		if len(lobby.Players) == 1 {
 			symbol = "O"
@@ -113,41 +170,52 @@ func AssignAndNotifyPlayer(lobby *models.Lobby, ws *websocket.Conn, player *mode
 		player.Symbol = symbol
 		lobby.Players = append(lobby.Players, player)
 
-		// Prepare and send the message to individual player
+		// Notify the new player
 		messageToUser := map[string]interface{}{
 			"type":     "assignPlayer",
-			"userName": player.Name,
+			"username": player.Name,
 			"symbol":   player.Symbol,
+			"id":       player.ID,
 		}
 		sendJSON(ws, messageToUser)
 
-		// Notify both players
+		// Notify chat about the new player
 		gameMasterMessage := map[string]interface{}{
 			"type":   "chat",
 			"sender": "GAMEMASTER",
 			"text":   fmt.Sprintf("%v has joined the game!", player.Name),
 		}
-		chat.HandleChatMessage(lobby, gameMasterMessage)
+		chat.HandleChatMessage(lobby.ID, gameMasterMessage, lobbyConnections)
 
 	} else {
 		// Assign additional connections as spectators
 		player.Symbol = "S"
 		lobby.Players = append(lobby.Players, player)
 
-		// Send spectator notification
+		playerAssign := map[string]interface{}{
+			"type":     "assignPlayer",
+			"username": player.Name,
+			"symbol":   player.Symbol,
+			"id":       player.ID,
+		}
+
+		sendJSON(ws, playerAssign)
+		// Notify spectator
 		messageToUser := map[string]interface{}{
 			"type":     "lobbyFull",
 			"userName": player.Name,
 			"text":     "The lobby is full, you are now spectating.",
+			"ID":       player.ID,
 		}
 		sendJSON(ws, messageToUser)
 
+		// Notify chat about the spectator
 		gameMasterMessage := map[string]interface{}{
 			"type":   "chat",
 			"sender": "GAMEMASTER",
 			"text":   fmt.Sprintf("%v is now spectating!", player.Name),
 		}
-		chat.HandleChatMessage(lobby, gameMasterMessage)
+		chat.HandleChatMessage(lobby.ID, gameMasterMessage, lobbyConnections)
 
 	}
 }
@@ -164,4 +232,42 @@ func sendJSON(ws *websocket.Conn, msg map[string]interface{}) {
 	if _, err := ws.Write(jsonData); err != nil {
 		log.Println("Error sending JSON:", err)
 	}
+}
+
+func fetchLobbiesFromRedis() ([]models.Lobby, error) {
+	// Get all keys matching "lobby:*"
+	keys, err := redisClient.Keys("lobby:*").Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var lobbies []models.Lobby
+	for _, key := range keys {
+		// Fetch data from Redis
+		data, err := redisClient.Get(key).Result()
+		if err != nil {
+			log.Printf("Error fetching %s: %v", key, err)
+			continue
+		}
+
+		var lobby models.Lobby
+		if err := json.Unmarshal([]byte(data), &lobby); err != nil {
+			log.Printf("Error unmarshalling %s: %v", key, err)
+			continue
+		}
+		lobbies = append(lobbies, lobby)
+	}
+
+	return lobbies, nil
+}
+
+func HandleLobbies(w http.ResponseWriter, r *http.Request) {
+	lobbies, err := fetchLobbiesFromRedis()
+	if err != nil {
+		http.Error(w, "Failed to fetch lobbies", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(lobbies)
 }

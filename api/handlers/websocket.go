@@ -9,58 +9,56 @@ import (
 	"tictacgo/pkg/game"
 	"tictacgo/pkg/lobby"
 
-	"github.com/google/uuid"
+	"github.com/go-redis/redis"
 	"golang.org/x/net/websocket"
 )
 
 // globals
 // store active game lobbies in a map, a map in go is used to store key value pairs, dictionary-like
-var Lobbies = make(map[string]*models.Lobby)
+var LobbyConnections = make(map[string][]*websocket.Conn)
+
+var redisClient = redis.NewClient(&redis.Options{
+	Addr: "localhost:6379",
+})
 
 // HandleWebSocket - Handle WebSocket connection
 // manages Chat, Moves, Ready Messages, and Game State
+// Ensure only one active connection per player
 func HandleWebSocket(ws *websocket.Conn) {
-
-	// Extract lobby ID from the query string
 	query := ws.Request().URL.Query()
 	lobbyID := query.Get("lobby")
 
-	// Check if lobbyID is empty
 	if lobbyID == "" {
 		fmt.Println("Lobby ID is required")
 		ws.Close()
 		return
 	}
 
-	// Retrieve the lobby from the Lobbies map and check if it exists
-	// looked up by using the lobby ID as the map key
 	currentLobby, exists := models.Lobbies[lobbyID]
-
-	// if lobby exists, init a new state with an empty gameboard
-	if exists {
-		// Check if ChatMessages is already initialized, otherwise initialize as empty array
-		if currentLobby.ChatMessages == nil {
-			currentLobby.ChatMessages = []models.ChatMessage{}
-		}
-		// Check if ReadyPlayers is already initialized, otherwise initialize as empty map
-		if currentLobby.ReadyPlayers == nil {
-			currentLobby.ReadyPlayers = make(map[string]bool)
-		}
+	if !exists {
+		fmt.Println("Lobby not found")
+		ws.Close()
+		return
 	}
 
-	// Proceed with assigning players to the lobby
-	playerID := uuid.New().String()
-	// A new player object is created with this unique ID, using Player struct in models.go
-	player := &models.Player{ID: playerID}
+	if _, exists := LobbyConnections[lobbyID]; !exists {
+		LobbyConnections[lobbyID] = []*websocket.Conn{}
+	}
 
-	// Add the WebSocket connection to the lobby
-	currentLobby.Conns = append(currentLobby.Conns, ws)
+	// Remove stale connections before adding a new one
+	removeDuplicateConnection(lobbyID, ws)
+	// Add the new connection
+	LobbyConnections[lobbyID] = append(LobbyConnections[lobbyID], ws)
 
-	//!TODO - investigate ways to simplify this into one function, avoid race
-	// Send the current state to the newly connected client
+	// Handle connection cleanup on disconnect
+	defer func() {
+		fmt.Println("Client disconnected, removing from lobby")
+		removeConnection(currentLobby.ID, ws)
+	}()
+
 	HandleInitialConnection(ws, currentLobby)
 
-	// Continuously handle incoming messages
+	// Handle incoming messages
 	for {
 		var msg map[string]interface{}
 		err := websocket.JSON.Receive(ws, &msg)
@@ -68,7 +66,6 @@ func HandleWebSocket(ws *websocket.Conn) {
 			fmt.Printf("Error receiving message: %v\n", err)
 			break
 		}
-		fmt.Printf("Received message: %+v\n", msg)
 
 		msgType, ok := msg["type"].(string)
 		if !ok {
@@ -77,65 +74,64 @@ func HandleWebSocket(ws *websocket.Conn) {
 
 		switch msgType {
 		case "setUsername":
-			if username, ok := msg["userName"].(string); ok {
-				// Now you can use the username as needed
-				player.Name = username
-				lobby.AssignAndNotifyPlayer(currentLobby, ws, player)
-			} else {
-				fmt.Println("Username is missing or not a string in the received message.")
+			username, ok := msg["username"].(string)
+			if !ok {
+				continue
 			}
+			var id string
+			if idVal, ok := msg["id"].(string); ok {
+				id = idVal
+			}
+
+			lobby.AssignAndNotifyPlayer(currentLobby, ws, username, id, LobbyConnections)
+
+			storeLobbyState(lobbyID, currentLobby)
 		case "chat":
-			chat.HandleChatMessage(currentLobby, msg)
+			chat.HandleChatMessage(currentLobby.ID, msg, LobbyConnections)
+			storeLobbyState(lobbyID, currentLobby)
 		case "move":
-			// Extract the move details
 			rawPosition := msg["position"].(float64)
-			username := msg["userName"].(string)
+			username := msg["username"].(string)
 			position := int(rawPosition)
 			symbol := msg["symbol"].(string)
 
 			response := currentLobby.Game.HandleGameMove(position, symbol, username)
-			fmt.Println("resp", response)
-
 			broadcastMove(currentLobby, response)
+			storeLobbyState(lobbyID, currentLobby)
 
-			for _, conn := range currentLobby.Conns {
+			for _, conn := range LobbyConnections[currentLobby.ID] {
 				if err := websocket.JSON.Send(conn, response); err != nil {
 					log.Printf("Error sending move message: %v", err)
 					continue
 				}
 			}
 		case "ready":
-			// Mark the player as ready
-			// add player to ReadyPlayers map
-			// TODO!- add support for unready and check bool values
-			currentLobby.ReadyPlayers[player.ID] = true
+			username := msg["username"].(string)
+			ready := msg["ready"].(bool)
 
-			// Check if both players are ready to start the game
-			if len(currentLobby.ReadyPlayers) == 2 {
+			if ready {
+				currentLobby.ReadyPlayers[username] = true
+				if len(currentLobby.ReadyPlayers) == 2 && !currentLobby.GameStarted {
+					currentLobby.GameStarted = true // Prevent duplicate start messages
+					start := map[string]interface{}{
+						"type": "startGame",
+					}
+					for _, conn := range LobbyConnections[currentLobby.ID] {
+						sendJSON(conn, start)
+					}
 
-				// Broadcast startGame message to all connected clients
-				start := map[string]interface{}{
-					"type": "startGame",
+					gameMasterMessage := map[string]interface{}{
+						"type":   "chat",
+						"sender": "GAMEMASTER",
+						"text":   "Both players are ready. The game will start now!",
+					}
+					chat.HandleChatMessage(currentLobby.ID, gameMasterMessage, LobbyConnections)
 				}
-
-				// send statGame message to all Conns in the lobby
-				for _, conn := range currentLobby.Conns {
-					sendJSON(conn, start)
-				}
-
-				// Notify both players that the game is ready to start
-				gameMasterMessage := map[string]interface{}{
-					"type":   "chat",
-					"sender": "GAMEMASTER",
-					"text":   "Both players are ready. The game will start now!",
-				}
-				chat.HandleChatMessage(currentLobby, gameMasterMessage)
+			} else if !ready {
+				delete(currentLobby.ReadyPlayers, username)
+				fmt.Printf("Player %s is no longer ready\n", username)
 			}
-		case "unready":
-			fmt.Println("player unready: ", player)
-			delete(currentLobby.ReadyPlayers, player.ID)
 		}
-
 	}
 }
 
@@ -182,13 +178,65 @@ func broadcastMove(lobby *models.Lobby, result game.GameMessage) {
 			"sender": "GAMEMASTER",
 			"text":   fmt.Sprintf("%v Wins!!", result.Winner),
 		}
-		chat.HandleChatMessage(lobby, gameMasterMessage)
+
+		lobby.Game.Reset()
+		lobby.GameStarted = false
+		chat.HandleChatMessage(lobby.ID, gameMasterMessage, LobbyConnections)
 	case "draw":
 		gameMasterMessage := map[string]interface{}{
 			"type":   "chat",
 			"sender": "GAMEMASTER",
 			"text":   "Its a Draw! Try Again!",
 		}
-		chat.HandleChatMessage(lobby, gameMasterMessage)
+		lobby.Game.Reset()
+		lobby.GameStarted = false
+		chat.HandleChatMessage(lobby.ID, gameMasterMessage, LobbyConnections)
 	}
+}
+
+func storeLobbyState(lobbyID string, lobby *models.Lobby) {
+	// Convert lobby state to JSON
+	lobbyJSON, err := json.Marshal(lobby)
+	if err != nil {
+		log.Printf("Error marshalling lobby state: %v", err)
+		return
+	}
+
+	// Store in Redis without expiration (manual deletion)
+	err = redisClient.Set("lobby:"+lobbyID, lobbyJSON, 0).Err()
+	if err != nil {
+		log.Printf("Error storing lobby state in Redis: %v", err)
+	} else {
+		log.Printf("Lobby %s state saved in Redis", lobbyID)
+	}
+}
+
+func removeDuplicateConnection(lobbyID string, newConn *websocket.Conn) {
+	var activeConns []*websocket.Conn
+
+	for _, conn := range LobbyConnections[lobbyID] {
+		if conn == newConn {
+			fmt.Println("Duplicate connection found, removing old one.")
+			conn.Close() // Close the old connection
+			continue
+		}
+		activeConns = append(activeConns, conn)
+	}
+
+	LobbyConnections[lobbyID] = activeConns
+}
+
+func removeConnection(lobbyID string, conn *websocket.Conn) {
+	var activeConns []*websocket.Conn
+
+	for _, c := range LobbyConnections[lobbyID] {
+		if c == conn {
+			fmt.Println("Closing stale connection")
+			c.Close()
+			continue
+		}
+		activeConns = append(activeConns, c)
+	}
+
+	LobbyConnections[lobbyID] = activeConns
 }

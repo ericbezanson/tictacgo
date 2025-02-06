@@ -3,33 +3,80 @@ document.addEventListener("DOMContentLoaded", () => {
     const submitUsernameBtn = document.getElementById("submitUsernameBtn");
     const usernameInput = document.getElementById("username");
     const lobbyList = document.getElementById("lobby-list");
+    const nameSubmit = document.getElementById("nameSubmit")
+    const usernameDisplay = document.createElement("p");
+    usernameDisplay.id = "usernameDisplay";
+    document.body.insertBefore(usernameDisplay, nameSubmit);
+
     let username = "";
+    let userProfile = null; // Store the user profile data
 
     function validateUsername(name) {
         const regex = /^[a-zA-Z0-9]{1,15}$/;
         return regex.test(name);
     }
 
+    const userProfileJSON = localStorage.getItem('TTTprofile');
+
+    if (userProfileJSON) {
+        const userProfile = JSON.parse(userProfileJSON);
+        if (userProfile) {
+            username = userProfile.Name; // Set username from cookie if available
+            usernameDisplay.innerHTML = `You are playing as: <strong>${username}</strong>`;
+            createLobbyBtn.disabled = false;
+            usernameInput.style.display = "none"; // Hide username input
+            submitUsernameBtn.disabled = true;
+            submitUsernameBtn.style.display = "none" // Hide submit button
+        } else {
+            console.log("Local Storage Data not found");
+        }
+    } else {
+        console.log("Object not found in local storage.");
+        usernameInput.style.display = "inline"; // Show username input
+        submitUsernameBtn.disabled = false; // Show submit button
+    }
+
     submitUsernameBtn.addEventListener("click", () => {
-       const inputUsername = usernameInput.value.trim();
-        console.log("fired", inputUsername)
-            if (validateUsername(inputUsername)) {
-                username = inputUsername;
-                document.cookie = `username=${username}; path=/`; // Set a cookie for the username
-                alert(`Username set to ${username}`);
-                createLobbyBtn.disabled = false;
-            } else {
-                alert("Invalid username. Please use only letters and numbers (up to 15 characters).");
-            }
-       
+        const inputUsername = usernameInput.value.trim();
+        if (validateUsername(inputUsername)) {
+            username = inputUsername;
+            usernameDisplay.innerHTML = `You are playing as: <strong>${username}</strong>`;
+            createLobbyBtn.disabled = false;
+            usernameInput.style.display = "none"; // Hide username input
+            submitUsernameBtn.style.display = "none"; // Hide submit button
+            // Create the user profile object
+            const userProfile = {
+                Name: username,
+            };
+
+     
+            const userProfileJSON = JSON.stringify(userProfile);
+
+            localStorage.setItem('TTTprofile', userProfileJSON);
+
+        } else {
+            alert("Invalid username. Please use only letters and numbers (up to 15 characters).");
+        }
     });
 
     if (createLobbyBtn) {
         createLobbyBtn.addEventListener("click", () => {
-            const usernameParam = encodeURIComponent(username); // Make sure username is properly encoded
-            window.location.href = `/create-lobby?username=${usernameParam}`;
+            // Construct query parameters from userProfile (or username if cookie not available)
+            let params = {};
+            if (userProfile) {
+                params = {
+                    ID: userProfile.ID,
+                    Name: userProfile.Name,
+                };
+            } else {
+                params = {
+                    Name: username, // Fallback to username if cookie not available
+                };
+            }
+
+            const queryString = new URLSearchParams(params).toString();
+            window.location.href = `/create-lobby?${queryString}`;
         });
-        
     }
 
     function fetchLobbies() {
@@ -66,7 +113,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     window.joinLobby = function (id) {
-        window.location.href = `/lobby/${id}`;
+        let params = {};
+        if (userProfile) {
+            params = {
+                ID: userProfile.id,
+                Name: userProfile.Name,
+            };
+        } else {
+            params = {
+                Name: username, // Fallback to username if cookie not available
+            };
+        }
+        const queryString = new URLSearchParams(params).toString();
+
+        window.location.href = `/lobby/${id}?${queryString}`;
     };
 
     if (lobbyList) {
@@ -81,12 +141,6 @@ document.addEventListener("DOMContentLoaded", () => {
             console.log("Connected to WebSocket", username);
         };
 
-        ws.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            console.log("(HOMESCREEN: Message received:", message);
-
-        };
-
         ws.onclose = () => console.log("Disconnected from WebSocket");
     }
 
@@ -95,3 +149,5 @@ document.addEventListener("DOMContentLoaded", () => {
         if (lobbyID) connectToLobby(lobbyID);
     });
 });
+
+

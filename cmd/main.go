@@ -24,7 +24,8 @@ func main() {
 
 	// Handle requests to /create-lobby and /lobbies
 	http.HandleFunc("/create-lobby", lobby.CreateLobby)
-	http.HandleFunc("/lobbies", lobby.GetLobbies)
+	// http.HandleFunc("/lobbies", lobby.GetLobbies)
+	http.HandleFunc("/lobbies", lobby.HandleLobbies)
 
 	// WebSocket handler
 	http.Handle("/ws", websocket.Handler(handlers.HandleWebSocket))

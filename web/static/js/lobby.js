@@ -8,11 +8,12 @@ const gameBoard = document.getElementById("tic-tac-toe");
 const messagesDiv = document.getElementById("messages");
 const playerInfo = document.getElementById("player-info");
 const user = document.getElementById("user")
+const role = document.getElementById("role")
 const readyToggle = document.getElementById("ready-toggle");
 
 // Initial game values
 let currentPlayer = "X";
-let userName = "";
+let username = "";
 let playerSymbol = "";
 let activePlayer = "X";
 let gameStarted = false;
@@ -24,16 +25,22 @@ let chatMessages = [];
 // WebSocket connection opened
 ws.onopen = () => {
 
-    // Retrieve the username cookie (or any other cookie you need)
-    const usernameCookie = getCookie("username");
-    if (usernameCookie) {
-        // Send the cookie value to the server
-        ws.send(JSON.stringify({
-            type: "setUsername",
-            userName: usernameCookie
-        }));
+    const userProfileJSON = localStorage.getItem('TTTprofile');
+
+    if (userProfileJSON) {
+        const userProfile = JSON.parse(userProfileJSON);
+        if (userProfile) {
+            // Send the cookie value to the server
+            ws.send(JSON.stringify({
+                type: "setUsername",
+                username: userProfile.Name,
+                id: userProfile.ID
+            }));
+        } else {
+            console.log("Local Storage Data not found");
+        }
     } else {
-        console.log("Username cookie not found.");
+        console.log("Object not found in local storage.");
     }
 };
 
@@ -50,7 +57,6 @@ ws.onclose = () => {
 // Handler for messages received from server
 ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    console.log("MESSAGE", message)
     switch (message.type) {
 
         case "initialState":
@@ -65,7 +71,6 @@ ws.onmessage = (event) => {
             if (message.chatMessages && Array.isArray(message.chatMessages)) {
                 updateChatMessages(message.chatMessages);
             }
-
 
             break;
 
@@ -82,19 +87,29 @@ ws.onmessage = (event) => {
 
 
         case "lobbyFull":
-            userName = message.userName;
-            user.innerHTML = `YOU ARE SPECTATING AS <b>${userName}</b>`;
+            username = message.usermame;
+            user.innerHTML = `YOU ARE SPECTATING AS <b>${username}</b>`;
             alert(message.text);
             break;
 
         case "assignPlayer":
-            userName = message.userName;
+            username = message.username;
             playerSymbol = message.symbol;
-            user.innerHTML = `YOU ARE PLAYING AS <b>${userName}</b>`;
+            user.innerHTML = `YOU ARE PLAYING AS <b>${username}</b>`;
+            role.innerHTML = `Playing as: <b>${playerSymbol}<b>`
+
+            // Create the user profile object
+            const userProfile = {
+                ID: message.id, // Assuming the server sends the ID
+                Name: username,
+            };
+
+            const userProfileJSON = JSON.stringify(userProfile);
+
+            localStorage.setItem('TTTprofile', userProfileJSON);
             break;
 
         case "startGame":
-            console.log("start game", message)
             gameStarted = true
 
         // Handler for player moves
@@ -107,7 +122,6 @@ ws.onmessage = (event) => {
                 }
                 cell.textContent = message.symbol;
                 cell.style.pointerEvents = "none";
-                console.log("About to call handleNext with:", message); // Debug log
                 handleNext(message); // Call handleNext *here*
             } else {
                 console.error("Unexpected message format", message);
@@ -115,7 +129,7 @@ ws.onmessage = (event) => {
             break; // Break is essential here
 
         case "chat":
-            appendChatMessages(message)
+            updateChatMessages(message.chatMessages)
 
             break;
 
@@ -130,13 +144,12 @@ ws.onmessage = (event) => {
 // Sends message to server when submit button is clicked
 function sendMessage() {
     const input = document.getElementById("message");
-    ws.send(JSON.stringify({ type: "chat", sender: userName, text: input.value }));
+    ws.send(JSON.stringify({ type: "chat", sender: username, text: input.value }));
     input.value = "";
 }
 
 // Send Tic-Tac-Toe tile position data to server to be processed by server game logic
 function handleCellClick(e) {
-    console.log("ActivePlayer", activePlayer)
     const cell = e.target;
     const cells = Array.from(gameBoard.children);
     const position = cells.indexOf(cell);
@@ -163,11 +176,9 @@ function handleCellClick(e) {
     ws.send(JSON.stringify({
         type: "move",
         position: position,
-        userName: userName,
+        username: username,
         symbol: playerSymbol
     }));
-
-    console.log(`Move sent: Player ${userName} to position ${position}`);
 }
 
 // Handle the "Ready Up" toggle
@@ -178,7 +189,7 @@ function toggleReady() {
     ws.send(JSON.stringify({
         type: "ready",
         ready: isReady,
-        userName: userName
+        username: username
     }));
 }
 // Creates game board
@@ -203,18 +214,13 @@ function resetBoard() {
     });
 }
 
-function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-}
 
 // Function to update chat messages
 function updateChatMessages(serverMessages) {
     const localLength = chatMessages.length;
     const serverLength = serverMessages.length;
 
+    // if new messages available
     if (serverLength > localLength) {
         // Add only the new messages
         const newMessages = serverMessages.slice(localLength);
@@ -227,7 +233,6 @@ function updateChatMessages(serverMessages) {
 
 // Function to render messages on the UI
 function renderMessages(messages) {
-    console.log("renderMessage", messages)
     if (messages) {
         // Check if 'messages' is an array or a single object
         const isArray = Array.isArray(messages);
@@ -236,7 +241,6 @@ function renderMessages(messages) {
         const messagesArray = isArray ? messages : [messages];
 
         messagesArray.forEach(chatMsg => {
-            console.log("chatMsg", chatMsg)
             // Check if the message has already been added 
             // (You might want to refine this logic based on your needs)
 
@@ -253,44 +257,44 @@ function renderMessages(messages) {
 }
 
 function handleNext(message) {
-
-    console.log("handle Next", message)
     switch (message.next) {
         case "updateTurn":
             activePlayer = message.text;
             break;
 
-            case "win":
-                gameStarted = false
-                isReady = false
-                alert(message.text);  // Show the winner
-    
-                // Uncheck the "ready-toggle" checkbox
-                readyToggle.checked = false;
-    
-                // Send an "unready" message through the WebSocket
-                ws.send(JSON.stringify({
-                    type: "unready",
-                    userName: userName
-                }));
-                resetBoard();  // Reset the game
-                break;
-    
-            case "draw":
-                gameStarted = false
-                isReady = false
-                alert(message.text);  // Show the winner
-    
-                // Uncheck the "ready-toggle" checkbox
-                readyToggle.checked = false;
-    
-                // Send an "unready" message through the WebSocket
-                ws.send(JSON.stringify({
-                    type: "unready",
-                    userName: userName
-                }));
-                resetBoard();  // Reset the game
-                break;
+        case "win":
+            gameStarted = false
+            isReady = false
+            alert(message.text);  // Show the winner
+
+            // Uncheck the "ready-toggle" checkbox
+            readyToggle.checked = false;
+
+            // TODO! - add support for unready messages
+            ws.send(JSON.stringify({
+                type: "ready",
+                ready: false,
+                username: username
+            }));
+            resetBoard();  // Reset the game
+            break;
+
+        case "draw":
+            gameStarted = false
+            isReady = false
+            alert(message.text);  // Show the winner
+
+            // Uncheck the "ready-toggle" checkbox
+            readyToggle.checked = false;
+
+            // TODO! - add support for unready messages
+            ws.send(JSON.stringify({
+                type: "ready",
+                ready: false,
+                username: username
+            }));
+            resetBoard();  // Reset the game
+            break;
         default:
             break;
     }

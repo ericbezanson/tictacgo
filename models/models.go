@@ -1,11 +1,8 @@
 package models
 
 import (
-	"encoding/json"
 	"tictacgo/pkg/game"
 	"time"
-
-	"golang.org/x/net/websocket"
 )
 
 // A global map storing active game lobbies.
@@ -25,33 +22,11 @@ type Lobby struct {
 	Name         string
 	MaxPlayers   int
 	Players      []*Player
-	Conns        []*websocket.Conn
-	Game         *game.Game // ✅ Reference Game directly
+	Game         *game.Game
 	ReadyPlayers map[string]bool
-	GameStarted  bool          `json:"gameStarted"`
-	ChatMessages []ChatMessage `json:"chatMessages"`
-	CurrentTurn  string        `json:"currentTurn"`
-}
-
-func (l *Lobby) BroadcastChatMessages() error {
-	// Create a message to send to clients
-	msg := struct {
-		Type         string        `json:"type"`
-		ChatMessages []ChatMessage `json:"chatMessages"`
-	}{
-		Type:         "updatePlayers",
-		ChatMessages: l.ChatMessages,
-	}
-
-	// Send the message to all connected clients
-	for _, conn := range l.Conns {
-		err := json.NewEncoder(conn).Encode(msg)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	GameStarted  bool
+	ChatMessages []ChatMessage
+	CurrentTurn  string
 }
 
 type Message struct {
@@ -63,15 +38,6 @@ type Message struct {
 	Position  int    `json:"position"`
 	Timestamp string `json:"timestamp"`
 }
-
-// type Game struct {
-// 	Board          [9]string
-// 	CurrentTurn    string
-// 	GameStarted    bool
-// 	UserCount      int
-// 	SpectatorCount int
-// 	Players        []string // track player names/symbols
-// }
 
 type ChatMessage struct {
 	Text      string
