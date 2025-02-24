@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"tictacgo/internal/chat"
+	"tictacgo/internal/game"
+	"tictacgo/internal/lobby"
 	"tictacgo/models"
-	"tictacgo/pkg/chat"
-	"tictacgo/pkg/game"
-	"tictacgo/pkg/lobby"
 
 	"github.com/go-redis/redis"
 	"golang.org/x/net/websocket"
@@ -45,8 +45,10 @@ func HandleWebSocket(ws *websocket.Conn) {
 		LobbyConnections[lobbyID] = []*websocket.Conn{}
 	}
 
+	// TODO! - Test if still needed,
 	// Remove stale connections before adding a new one
 	removeDuplicateConnection(lobbyID, ws)
+
 	// Add the new connection
 	LobbyConnections[lobbyID] = append(LobbyConnections[lobbyID], ws)
 
@@ -195,9 +197,10 @@ func broadcastMove(lobby *models.Lobby, result game.GameMessage) {
 }
 
 func storeLobbyState(lobbyID string, lobby *models.Lobby) {
-	// Convert lobby state to JSON
+	// Convert lobby state into a JSON-encoded byte slice
 	lobbyJSON, err := json.Marshal(lobby)
 	if err != nil {
+		// if conversion fails (e.g., due to struct incompatibility or nil pointers), it logs an error and exits early.
 		log.Printf("Error marshalling lobby state: %v", err)
 		return
 	}
@@ -211,6 +214,8 @@ func storeLobbyState(lobbyID string, lobby *models.Lobby) {
 	}
 }
 
+// TODO - Investigate if still needed
+// remove duplicate conns
 func removeDuplicateConnection(lobbyID string, newConn *websocket.Conn) {
 	var activeConns []*websocket.Conn
 
@@ -226,6 +231,8 @@ func removeDuplicateConnection(lobbyID string, newConn *websocket.Conn) {
 	LobbyConnections[lobbyID] = activeConns
 }
 
+// TODO - Investigate if still needed
+// remove all conns (server shutdown)
 func removeConnection(lobbyID string, conn *websocket.Conn) {
 	var activeConns []*websocket.Conn
 
