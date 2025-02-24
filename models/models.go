@@ -1,7 +1,7 @@
 package models
 
 import (
-	"tictacgo/pkg/game"
+	"tictacgo/internal/game"
 	"time"
 )
 

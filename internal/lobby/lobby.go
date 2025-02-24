@@ -6,9 +6,9 @@ import (
 	"html/template" // Provides functions for parsing and executing HTML templates, allowing the rendering of HTML content with dynamic data.
 	"log"
 	"net/http" // handles http requests
+	"tictacgo/internal/chat"
+	"tictacgo/internal/game"
 	"tictacgo/models"
-	"tictacgo/pkg/chat"
-	"tictacgo/pkg/game"
 
 	"github.com/go-redis/redis"
 	"github.com/google/uuid" // generate uuids
@@ -241,6 +241,7 @@ func fetchLobbiesFromRedis() ([]models.Lobby, error) {
 		return nil, err
 	}
 
+	// create variable to store lobbies in
 	var lobbies []models.Lobby
 	for _, key := range keys {
 		// Fetch data from Redis
@@ -251,16 +252,19 @@ func fetchLobbiesFromRedis() ([]models.Lobby, error) {
 		}
 
 		var lobby models.Lobby
+		//de-serialize JSON into a models.lobby struct
 		if err := json.Unmarshal([]byte(data), &lobby); err != nil {
 			log.Printf("Error unmarshalling %s: %v", key, err)
 			continue
 		}
+		// add parsed lobby to list of lobbies
 		lobbies = append(lobbies, lobby)
 	}
 
 	return lobbies, nil
 }
 
+// handler called when /lobbies api is hit
 func HandleLobbies(w http.ResponseWriter, r *http.Request) {
 	lobbies, err := fetchLobbiesFromRedis()
 	if err != nil {

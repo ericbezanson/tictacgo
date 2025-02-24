@@ -3,7 +3,7 @@ package routes
 import (
 	"net/http"
 	"tictacgo/api/handlers"
-	"tictacgo/pkg/lobby"
+	"tictacgo/internal/lobby"
 
 	"golang.org/x/net/websocket"
 )

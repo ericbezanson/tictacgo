@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"tictacgo/pkg/routes"
+	"tictacgo/internal/routes"
 	"time"
 )
 
