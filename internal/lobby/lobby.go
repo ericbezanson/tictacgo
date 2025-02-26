@@ -6,6 +6,7 @@ import (
 	"html/template" // Provides functions for parsing and executing HTML templates, allowing the rendering of HTML content with dynamic data.
 	"log"
 	"net/http" // handles http requests
+	"os"
 	"tictacgo/internal/chat"
 	"tictacgo/internal/game"
 	"tictacgo/models"
@@ -16,45 +17,8 @@ import (
 )
 
 var redisClient = redis.NewClient(&redis.Options{
-	Addr: "localhost:6379",
+	Addr: os.Getenv("REDIS_ADDRESS"), // Use environment variable
 })
-
-func GetLobbies(w http.ResponseWriter, r *http.Request) {
-	keys, err := redisClient.Keys("lobby:*").Result()
-	if err != nil {
-		log.Println("Redis KEYS error:", err) // Log Redis error
-		http.Error(w, "Failed to fetch lobbies", http.StatusInternalServerError)
-		return
-	}
-
-	if len(keys) == 0 {
-		log.Println("ℹ️ No lobbies found in Redis.")
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("[]")) // Return empty JSON array
-		return
-	}
-
-	var lobbies []models.Lobby
-
-	for _, key := range keys {
-		lobbyData, err := redisClient.Get(key).Result()
-		if err != nil {
-			log.Printf("Error retrieving lobby %s: %v", key, err)
-			continue
-		}
-
-		var lobby models.Lobby
-		if err := json.Unmarshal([]byte(lobbyData), &lobby); err != nil {
-			log.Printf("Error decoding lobby %s: %v", key, err)
-			continue
-		}
-
-		lobbies = append(lobbies, lobby)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(lobbies)
-}
 
 func CreateLobby(w http.ResponseWriter, r *http.Request) {
 
@@ -66,8 +30,6 @@ func CreateLobby(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Username is required", http.StatusBadRequest)
 		return
 	}
-
-	fmt.Println(username)
 
 	// Read the username from the cookie
 	cookie, err := r.Cookie("Name")
@@ -84,11 +46,10 @@ func CreateLobby(w http.ResponseWriter, r *http.Request) {
 	// A new models.Lobby is created with a unique lobbyID, a name, max of 2 players (MaxPlayers: 2), and the newly created game (Game: newGame).
 	// & goes in front of a variable when you want to get that variable's memory address
 	newLobby := &models.Lobby{
-		ID:         lobbyID,
-		Name:       fmt.Sprintf("%s's Lobby", username),
-		MaxPlayers: 2,
-		Game:       newGame, // Initialize the Game here
-		// Conns:        []*websocket.Conn{},
+		ID:           lobbyID,
+		Name:         fmt.Sprintf("%s's Lobby", username),
+		MaxPlayers:   2,
+		Game:         newGame, // Initialize the Game here
 		Players:      []*models.Player{},
 		ReadyPlayers: make(map[string]bool), // ✅ Initialize the map
 		ChatMessages: []models.ChatMessage{},

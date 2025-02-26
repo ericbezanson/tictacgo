@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,9 +23,9 @@ func main() {
 	server := &http.Server{Addr: ":8080"}
 
 	go func() {
-		fmt.Println("Server started at :8080")
+		slog.Info("Server started at :8080")
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf("ListenAndServe(): %s", err)
+			slog.Error("ListenAndServe(): %s", "Error", err)
 		}
 	}()
 
@@ -36,7 +36,7 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server Shutdown Failed:%+v", err)
+		slog.Error("Server Shutdown Failed:%+v", "Error", err)
 	}
 	fmt.Println("Server exited properly")
 }

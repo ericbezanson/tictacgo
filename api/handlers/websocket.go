@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"tictacgo/internal/chat"
 	"tictacgo/internal/game"
 	"tictacgo/internal/lobby"
@@ -18,7 +19,7 @@ import (
 var LobbyConnections = make(map[string][]*websocket.Conn)
 
 var redisClient = redis.NewClient(&redis.Options{
-	Addr: "localhost:6379",
+	Addr: os.Getenv("REDIS_ADDRESS"), // Use environment variable
 })
 
 // HandleWebSocket - Handle WebSocket connection

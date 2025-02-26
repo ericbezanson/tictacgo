@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"log/slog"
 	"net/http"
 	"tictacgo/api/handlers"
 	"tictacgo/internal/lobby"
@@ -23,5 +24,6 @@ func SetupRoutes() {
 	http.HandleFunc("/lobby/", lobby.ServeLobby)
 
 	// WebSocket handler
+	slog.Info("Web socket handler")
 	http.Handle("/ws", websocket.Handler(handlers.HandleWebSocket))
 }
