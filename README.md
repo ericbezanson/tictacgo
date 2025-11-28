@@ -1,4 +1,4 @@
-# goChatSocket - basic websocket chat applicationG
+# goChatSocket - basic websocket chat application
 
 A simple real-time chat application built with Go (using WebSockets) and a basic HTML front end.
 
